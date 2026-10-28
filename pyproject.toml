@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seamproof"
+version = "0.1.0"
+description = "Deterministic sewing pattern verification and correction"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+    "shapely>=2.0",
+    "numpy>=1.26",
+    "reportlab>=4.0",
+    "pyyaml>=6.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+    # Face blur before any photo leaves the machine; 5.x dropped the Haar cascades.
+    "opencv-python-headless>=4.9,<5",
+    "ezdxf>=1.4,<1.5",  # DXF for cutter/CAD software
+]
+
+[project.optional-dependencies]
+# Test/lint tooling stays out of the runtime install: pip install -e ".[dev]"
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",  # fastapi.testclient
+    "ruff>=0.5",
+]
+
+[project.scripts]
+seamproof = "seamproof.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["seamproof*"]
+
+[tool.setuptools.package-data]
+seamproof = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

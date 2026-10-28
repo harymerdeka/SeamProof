@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SeamProof</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+  /* SeamProof studio. Two surfaces: the design table (paper with a dot grid)
+     where flats are sketched and versioned, and the cutting mat (green, true
+     10 mm grid) where drafted patterns and markers lie. Tape yellow marks
+     where you are and what is selected; tailor's-chalk blue marks the next
+     action; leaf and brick are pass and fail. */
+  :root {
+    --ground: #edefea; --surface: #ffffff; --sheet: #fafaf7; --paper: #f6f4ee;
+    --ink: #16201b; --ink-2: #2b3530; --muted: #5b6862; --faint: #8c9790;
+    --rule: #d5dad5; --rule-strong: #b6c0b9; --wash: #e4e8e3; --dot: #d3d6cd;
+    --mat: #1e4a39; --mat-deep: #143326; --mat-ink: #e9efe9; --mat-muted: rgba(233, 239, 233, .7);
+    --grid: rgba(235, 201, 68, .16); --grid-major: rgba(235, 201, 68, .42);
+    --tape: #ebc944; --tape-soft: #f8edbd; --tape-ink: #3a3110;
+    --chalk: #2c5a8c; --chalk-deep: #224a75; --chalk-soft: #e4ecf5;
+    --brick: #a3352a; --brick-soft: #f7e4e0; --leaf: #2f6b4a; --leaf-soft: #e2eee6;
+    --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --r-sm: 6px; --r-md: 12px; --r-lg: 16px;
+    --panel-w: 430px; --head-h: 112px;
+    --lift: 0 1px 0 rgba(0, 0, 0, .22), 0 14px 30px rgba(0, 0, 0, .28);
+    --sheet-shadow: 0 1px 2px rgba(22, 32, 27, .06), 0 6px 18px rgba(22, 32, 27, .06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--ground); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5;
+         -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  .muted { color: var(--muted); }
+  [hidden] { display: none !important; }
+
+  /* ---------- header + stepper */
+  header.top { background: var(--surface); border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 30; }
+  .top-row { display: flex; align-items: center; gap: 16px; padding: 10px 20px 4px; }
+  .wordmark { font-weight: 800; font-stretch: 125%; font-size: 18px; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .wordmark svg { width: 28px; height: 28px; }
+  .tagline { color: var(--muted); font-size: 13px; }
+  .job-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600;
+              padding: 5px 12px; border-radius: 999px; background: var(--wash); color: var(--ink-2); white-space: nowrap; }
+  .job-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .job-chip.pass i { background: var(--leaf); } .job-chip.fail i { background: var(--brick); }
+  .job-chip.signed { background: var(--tape-soft); color: var(--tape-ink); }
+  ol.stepper { list-style: none; margin: 0; padding: 6px 14px 10px; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .step { flex: 1 1 0; min-width: 150px; display: grid; grid-template-columns: 28px 1fr; gap: 0 9px; align-items: center; text-align: left;
+          border: 0; background: transparent; padding: 7px 10px; border-radius: var(--r-md); position: relative; width: 100%; }
+  .step:hover:not(:disabled) { background: var(--wash); }
+  .step:disabled { cursor: not-allowed; opacity: .48; }
+  .step-num { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+              border: 1.5px solid var(--rule-strong); font-weight: 700; font-size: 12.5px; background: var(--surface); }
+  .step-num svg { width: 14px; height: 14px; }
+  .step-title { font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+  .step-state { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .step.done .step-num { background: var(--leaf); border-color: var(--leaf); color: #fff; }
+  .step.bad .step-num { background: var(--brick); border-color: var(--brick); color: #fff; }
+  .step[aria-current="step"] { background: var(--tape-soft); }
+  .step[aria-current="step"] .step-num { border-color: var(--tape-ink); box-shadow: 0 0 0 3px var(--tape); }
+  .step[aria-current="step"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -10px; height: 3px; border-radius: 3px; background: var(--tape); }
+
+  /* ---------- studio: canvas + panel */
+  .studio { display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); height: calc(100vh - var(--head-h)); }
+  main.canvas { position: relative; overflow: hidden; display: flex; flex-direction: column; min-height: 0; background: var(--paper); }
+  .canvas-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 13px; border-bottom: 1px solid var(--rule); background: var(--sheet); }
+  .canvas-bar b { font-stretch: 125%; letter-spacing: .02em; white-space: nowrap; }
+  #mat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--muted); }
+  .views { display: flex; gap: 2px; background: var(--wash); padding: 3px; border-radius: 9px; }
+  .views button { border: 0; background: transparent; padding: 4px 11px; border-radius: 7px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+  .views button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  .views button:disabled { opacity: .45; cursor: not-allowed; }
+  .canvas-bar .tools { margin-left: auto; display: flex; gap: 6px; }
+  .canvas-bar .tools button { border: 1px solid var(--rule-strong); background: var(--surface); height: 30px; min-width: 30px;
+                              border-radius: var(--r-sm); font-weight: 700; font-size: 13px; padding: 0 9px; }
+  main.canvas.is-mat { background: var(--mat); }
+  .is-mat .canvas-bar { background: var(--mat-deep); color: var(--mat-ink); border-color: transparent; }
+  .is-mat #mat-sub { color: var(--mat-muted); }
+  .is-mat .views { background: rgba(233, 239, 233, .1); }
+  .is-mat .views button { color: var(--mat-muted); }
+  .is-mat .views button.active { background: var(--tape); color: var(--tape-ink); }
+  .is-mat .canvas-bar .tools button { border-color: rgba(233, 239, 233, .25); background: transparent; color: var(--mat-ink); }
+  .canvas-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
+  .is-board .canvas-body { background-image: radial-gradient(var(--dot) 1px, transparent 1.2px); background-size: 18px 18px; }
+  .is-mat .canvas-body { overflow: hidden; touch-action: none;
+              background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+              background-size: 24px 24px; }
+  .canvas-body.has-svg { background-image: none; cursor: grab; }
+  .canvas-body.drag { cursor: grabbing; }
+  .canvas-body svg.pattern { width: 100%; height: 100%; display: block; }
+  /* Screen-pixel strokes so lines stay readable at any zoom (geometry is still mm). */
+  svg.pattern polyline, svg.pattern line, svg.pattern rect.notch { vector-effect: non-scaling-stroke; }
+  svg.pattern polyline.stitch { stroke: var(--mat-muted); stroke-width: 1px; stroke-dasharray: 5 4; }
+  svg.pattern polyline.cut { stroke: var(--mat-ink); stroke-width: 1.6px; }
+  svg.pattern line.grain { stroke: var(--tape); stroke-width: 1.5px; }
+  svg.pattern rect.notch { stroke: #fff; stroke-width: 1.5px; }
+  svg.pattern text.label { fill: var(--mat-ink); font-family: var(--font); font-weight: 700; font-size: 11px; }
+  svg.pattern g[id]:hover polyline.cut { stroke: var(--tape); stroke-width: 2.6px; }
+  svg.pattern rect.mk-fabric { fill: rgba(233, 239, 233, .05); stroke: var(--tape); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  svg.pattern polygon.piece { fill: rgba(233, 239, 233, .07); }
+  svg.pattern polyline.fold { stroke: #9fc0e6; stroke-width: 1.2px; stroke-dasharray: 9 3 2 3; }
+  svg.pattern polyline.notch { stroke: #fff; stroke-width: 1.6px; }
+  svg.pattern line.mk-tick { stroke: var(--tape); stroke-width: 1px; }
+  svg.pattern text.mlabel { fill: var(--mat-ink); font-family: var(--font); font-weight: 700; font-size: 20px; }
+  svg.pattern text.mlabel-sub { fill: var(--mat-muted); font-family: var(--font); font-size: 12px; }
+  svg.pattern text.mk-tick-l, svg.pattern text.mk-sel { fill: var(--tape); font-family: var(--font); font-size: 12px; font-weight: 700; }
+  svg.pattern .mk-title, svg.pattern .mk-sub { display: none; }
+  svg.pattern g.mk-piece:hover polyline.cut { stroke: var(--tape); stroke-width: 2.6px; }
+  .mat-legend { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; color: var(--mat-ink);
+                font-size: 11.5px; background: rgba(20, 51, 38, .85); padding: 6px 10px; border-radius: var(--r-sm); }
+  .mat-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+  .mat-scale { position: absolute; right: 14px; bottom: 14px; color: var(--mat-ink); font-size: 11.5px;
+               background: rgba(20, 51, 38, .85); padding: 6px 10px; border-radius: var(--r-sm); }
+  .mat-hover { position: absolute; left: 14px; top: 12px; background: var(--tape); color: var(--tape-ink); font-weight: 700;
+               font-size: 12px; padding: 3px 9px; border-radius: var(--r-sm); opacity: 0; transition: opacity .12s; pointer-events: none; }
+  .mat-sizes { position: absolute; right: 14px; top: 12px; display: flex; gap: 4px; background: rgba(20, 51, 38, .85); padding: 4px; border-radius: var(--r-sm); }
+  .mat-sizes button { border: 0; background: transparent; color: var(--mat-ink); font-weight: 800; font-stretch: 125%; font-size: 12.5px;
+                      height: 28px; min-width: 34px; border-radius: 5px; padding: 0 8px; }
+  .mat-sizes button.active { background: var(--tape); color: var(--tape-ink); }
+  .mat-sizes button.bad { color: #f2a99f; }
+
+  /* ---------- design table */
+  .board { min-height: 100%; display: grid; align-content: center; justify-items: center; gap: 18px; padding: 28px 24px; }
+  .empty { max-width: 640px; text-align: center; display: grid; gap: 14px; justify-items: center; }
+  .empty h2 { margin: 0; font-stretch: 125%; font-size: 26px; letter-spacing: -.015em; line-height: 1.15; }
+  .empty p { margin: 0; color: var(--muted); max-width: 520px; }
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; margin-top: 8px; counter-reset: f; }
+  .flow div { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md); padding: 12px; text-align: left; font-size: 12.5px; color: var(--muted); counter-increment: f; }
+  .flow b { display: block; color: var(--ink); font-size: 13.5px; }
+  .flow b::before { content: counter(f); display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 7px; border-radius: 50%;
+                    background: var(--tape); color: var(--tape-ink); font-size: 11px; }
+  .flow .ai { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--chalk); display: block; margin-top: 6px; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; width: 100%; max-width: 980px; }
+  .opt { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); box-shadow: var(--sheet-shadow);
+         padding: 14px; display: grid; gap: 10px; text-align: left; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+  .opt:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(22, 32, 27, .08), 0 14px 30px rgba(22, 32, 27, .1); }
+  .opt[aria-pressed="true"] { border-color: var(--tape-ink); box-shadow: inset 0 0 0 1px var(--tape-ink), var(--sheet-shadow); }
+  .opt img { width: 100%; aspect-ratio: 570 / 300; object-fit: contain; background: var(--sheet); border-radius: var(--r-md); }
+  .opt .v3d { aspect-ratio: 1 / 1; max-height: 360px; }
+  .opt-head { display: flex; align-items: center; gap: 8px; }
+  .opt-head .tag { font-weight: 800; font-stretch: 125%; font-size: 12px; background: var(--ink); color: var(--surface); border-radius: 5px; padding: 1px 7px; }
+  .opt-head b { font-size: 15.5px; }
+  .opt p { margin: 0; font-size: 13px; color: var(--muted); }
+  .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .2); vertical-align: -2px; flex: none; }
+  .hero { width: 100%; max-width: 900px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg);
+          box-shadow: var(--sheet-shadow); padding: 18px 20px 14px; display: grid; gap: 8px; }
+  .hero-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .hero-head h2 { margin: 0; font-stretch: 118%; font-size: 21px; letter-spacing: -.01em; }
+  .hero-head .ver { font-weight: 800; font-stretch: 125%; font-size: 12px; color: var(--tape-ink); background: var(--tape); border-radius: 5px; padding: 1px 7px; }
+  .hero img { width: 100%; max-height: 42vh; object-fit: contain; }
+  /* 3D preview: built by preview3d.py, rendered with three.js; the flat is the fallback. */
+  .v3d { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden;
+         background: radial-gradient(ellipse at 50% 30%, #ffffff 0%, var(--sheet) 55%, #e8e5dc 100%); }
+  .hero .v3d { aspect-ratio: 16 / 10; max-height: 50vh; }
+  .v3d canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; touch-action: none; }
+  .v3d.orbit canvas { cursor: grab; } .v3d.orbit canvas:active { cursor: grabbing; }
+  .v3d .v3d-fallback { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+  .v3d.ready .v3d-fallback { display: none; }
+  .v3d-badge { position: absolute; left: 8px; top: 8px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; background: var(--ink);
+               color: #fff; border-radius: 5px; padding: 1px 7px; pointer-events: none; }
+  .v3d:not(.ready) .v3d-badge, .v3d:not(.ready) .v3d-tools { display: none; }
+  .v3d-tools { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px; }
+  .v3d-tools button { border: 1px solid var(--rule-strong); background: rgba(255, 255, 255, .92); border-radius: 6px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; }
+  .v3d-tools button:hover { border-color: var(--ink); }
+  .v3d-hint { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: var(--muted); pointer-events: none; }
+  .v3d:not(.ready) .v3d-hint { display: none; }
+  .pv-seg { display: flex; gap: 2px; background: var(--wash); padding: 2px; border-radius: 7px; }
+  .pv-seg button { border: 0; background: transparent; border-radius: 5px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; color: var(--muted); }
+  .pv-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  .specs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .specs span { font-size: 12px; background: var(--wash); border-radius: 999px; padding: 2px 10px; color: var(--ink-2); }
+  .specs span b { font-weight: 700; color: var(--muted); margin-right: 4px; }
+  .changes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .changes span { font-size: 12px; background: var(--chalk-soft); color: var(--chalk-deep); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
+  .versions { width: 100%; max-width: 900px; display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; }
+  .vthumb { flex: none; width: 128px; border: 1px solid var(--rule); background: var(--surface); border-radius: var(--r-md); padding: 6px; display: grid; gap: 3px; text-align: left; }
+  .vthumb img { width: 100%; aspect-ratio: 570 / 300; object-fit: contain; }
+  .vthumb b { font-size: 11.5px; font-stretch: 112%; }
+  .vthumb span { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vthumb[aria-current="true"] { border-color: var(--tape-ink); box-shadow: inset 0 0 0 1px var(--tape-ink); background: var(--tape-soft); }
+  .slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .slot { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-md); border: 1.5px dashed var(--rule-strong); background: var(--sheet);
+          overflow: hidden; display: grid; place-items: center; padding: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .slot.filled { border-style: solid; border-color: var(--rule); background: var(--surface); }
+  .slot.over { border-color: var(--chalk); background: var(--chalk-soft); }
+  .slot img { width: 100%; height: 100%; object-fit: cover; }
+  .slot .add { display: grid; justify-items: center; gap: 4px; }
+  .slot .add svg { width: 24px; height: 24px; color: var(--chalk); }
+  .slot .no { position: absolute; left: 6px; top: 6px; }
+  .slot .x { position: absolute; right: 5px; top: 5px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(22, 32, 27, .75);
+             color: #fff; font-size: 15px; line-height: 1; display: grid; place-items: center; }
+  .slot .state { position: absolute; inset: auto 0 0 0; padding: 4px 6px; font-size: 10.5px; background: rgba(250, 250, 247, .92); color: var(--ink-2); text-align: left; }
+  .slot .state.err { color: var(--brick); }
+  .no { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--ink);
+        color: var(--surface); font-weight: 800; font-stretch: 125%; font-size: 11.5px; }
+  .no.on { background: var(--tape); color: var(--tape-ink); }
+  .targets { display: grid; gap: 6px; }
+  .target { display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--rule); background: var(--surface);
+            border-radius: var(--r-sm); padding: 7px 10px; font-size: 13px; font-weight: 600; }
+  .target svg { width: 22px; height: 22px; color: var(--muted); flex: none; }
+  .target[aria-pressed="true"] { border-color: var(--tape-ink); background: var(--tape-soft); box-shadow: inset 0 0 0 1px var(--tape-ink); }
+  .target:disabled { opacity: .5; cursor: not-allowed; }
+  .parts { display: grid; gap: 8px; }
+  .part-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; font-weight: 600; }
+  .part-row small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+  .picks { display: flex; gap: 5px; }
+  .pick { position: relative; width: 38px; height: 46px; padding: 0; border-radius: 7px; border: 1px solid var(--rule-strong); overflow: hidden; background: var(--sheet); }
+  .pick img { width: 100%; height: 100%; object-fit: cover; }
+  .pick b { position: absolute; left: 2px; bottom: 2px; font-size: 10px; font-weight: 800; background: var(--ink); color: #fff; border-radius: 4px; padding: 0 4px; }
+  .pick[aria-checked="true"] { border-color: var(--tape-ink); box-shadow: 0 0 0 2px var(--tape); }
+  .pick[aria-checked="true"] b { background: var(--tape); color: var(--tape-ink); }
+  .pick:disabled { opacity: .3; cursor: not-allowed; }
+  .compare { width: 100%; max-width: 1040px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .pcard { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); box-shadow: var(--sheet-shadow); padding: 10px; display: grid; gap: 8px; align-content: start; }
+  .pcard.base { border-color: var(--tape-ink); box-shadow: inset 0 0 0 1px var(--tape-ink), var(--sheet-shadow); }
+  .pcard > img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--sheet); border-radius: var(--r-md); }
+  .pcard-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .pcard-head .pill { margin-left: auto; }
+  .feat { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12px; }
+  .feat li { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 3px 7px; border-radius: 5px; color: var(--muted); }
+  .feat li b { color: var(--ink-2); font-weight: 600; text-align: right; }
+  .feat li.taken { background: var(--tape-soft); color: var(--tape-ink); box-shadow: inset 3px 0 0 var(--tape); }
+  .feat li.taken b { color: var(--tape-ink); font-weight: 800; }
+  .feat li.na { opacity: .45; }
+  .prov { display: flex; flex-wrap: wrap; gap: 6px; }
+  .prov span { font-size: 12px; background: var(--tape-soft); color: var(--tape-ink); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
+  .photo-board { max-height: 64vh; max-width: 80%; border-radius: var(--r-md); box-shadow: var(--sheet-shadow); border: 6px solid var(--surface); }
+
+  /* ---------- panel (paper sheets) */
+  aside.panel { border-left: 1px solid var(--rule); background: var(--ground); overflow: auto; padding: 16px; }
+  .step-pane { display: grid; gap: 14px; align-content: start; }
+  .pane-head { display: grid; gap: 2px; }
+  .kicker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .pane-head h2 { margin: 0; font-size: 20px; font-stretch: 118%; letter-spacing: -.01em; line-height: 1.2; }
+  .pane-head p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+  .sheet { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-md); box-shadow: var(--sheet-shadow); padding: 16px; display: grid; gap: 14px; }
+  .sheet h2 { margin: 0; font-size: 17px; font-stretch: 112%; letter-spacing: -.01em; }
+  .sheet h3 { margin: 0; font-size: 14px; }
+  .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 7px; display: block; }
+  .seg { display: flex; background: var(--wash); border-radius: 9px; padding: 3px; gap: 3px; }
+  .seg button { flex: 1; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+  .seg button.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  .ai-note { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--chalk-deep); background: var(--chalk-soft); border-radius: var(--r-sm); padding: 6px 10px; }
+  .ai-note svg { width: 15px; height: 15px; flex: none; }
+
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .choice { position: relative; }
+  .choice input { position: absolute; opacity: 0; pointer-events: none; }
+  .choice label { display: grid; gap: 2px; justify-items: center; text-align: center; padding: 10px 4px 8px; height: 100%;
+                  border: 1px solid var(--rule); border-radius: var(--r-md); cursor: pointer; background: var(--surface); }
+  .choice label svg { width: 34px; height: 34px; color: var(--muted); }
+  .choice label b { font-size: 13.5px; }
+  .choice label span { font-size: 11px; color: var(--muted); line-height: 1.25; }
+  .choice input:checked + label { border-color: var(--tape-ink); background: var(--tape-soft); box-shadow: inset 0 0 0 1px var(--tape-ink); }
+  .choice input:checked + label svg { color: var(--tape-ink); }
+  .choice input:focus-visible + label { outline: 2px solid var(--chalk); outline-offset: 2px; }
+  .fabric-list { display: grid; gap: 6px; }
+  .fabric-list .choice label { grid-template-columns: auto 1fr; justify-items: start; text-align: left; padding: 9px 12px; gap: 0 10px; align-items: center; }
+  .fabric-list .choice label i { grid-row: span 2; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--rule-strong); }
+  .fabric-list .choice input:checked + label i { border-color: var(--tape-ink); background: var(--tape); }
+  .fabric-list em { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--chalk); margin-left: 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .sizes { display: flex; gap: 6px; }
+  .sizes button { flex: 1; height: 42px; border: 1px solid var(--rule-strong); border-radius: var(--r-sm); background: var(--surface);
+                  font-weight: 800; font-stretch: 125%; font-size: 14px; }
+  .sizes button.active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .sizes.small button { height: 30px; font-size: 12px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; }
+  .chip:hover:not(:disabled) { border-color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .chip:disabled { opacity: .5; cursor: progress; }
+  .quick { display: grid; gap: 10px; }
+  .quick-row { display: grid; grid-template-columns: 78px 1fr; gap: 8px; align-items: start; }
+  .quick-row > span { font-size: 11.5px; font-weight: 700; color: var(--muted); padding-top: 5px; }
+  .palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .palette button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .2); padding: 0; }
+  .palette button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+  .starters { display: grid; gap: 6px; }
+  .starters button { border: 1px dashed var(--rule-strong); background: var(--sheet); border-radius: var(--r-sm); padding: 8px 10px; font-size: 12.5px; text-align: left; color: var(--ink-2); }
+  .starters button:hover { border-color: var(--chalk); background: var(--chalk-soft); }
+  .plan-box { border: 1px solid var(--rule); border-radius: var(--r-md); padding: 10px 12px; display: grid; gap: 6px; background: var(--sheet); }
+  .plan-box .row { display: flex; align-items: center; gap: 8px; }
+  .plan-box svg { width: 26px; height: 26px; color: var(--ink-2); flex: none; }
+
+  input[type=text], input[type=number], textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--rule-strong);
+    border-radius: var(--r-sm); background: var(--surface); font-size: 14px; }
+  textarea { min-height: 90px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--chalk); box-shadow: 0 0 0 3px var(--chalk-soft); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .measure { display: grid; gap: 3px; }
+  .measure label { font-size: 12px; font-weight: 600; }
+  .measure .unit { position: relative; }
+  .measure .unit input { padding-right: 36px; font-variant-numeric: tabular-nums; }
+  .measure .unit::after { content: var(--u, "cm"); position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); pointer-events: none; }
+  .measure.changed input { border-color: var(--chalk); background: var(--chalk-soft); }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .examples button { border: 1px dashed var(--rule-strong); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); text-align: left; }
+
+  button.go { width: 100%; height: 46px; border: 0; border-radius: var(--r-md); background: var(--chalk); color: #fff; font-weight: 700;
+              font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 9px; }
+  button.go:hover:not(:disabled) { background: var(--chalk-deep); }
+  button.go:disabled { opacity: .55; cursor: not-allowed; }
+  button.go svg { width: 18px; height: 18px; }
+  button.go.small { height: 38px; font-size: 13.5px; }
+  button.go.quiet { background: var(--surface); color: var(--ink); border: 1px solid var(--rule-strong); }
+  /* Model-written text: chalk edge, with a tag saying who wrote it and that code checked the numbers. */
+  .muse-note { border-left: 3px solid var(--chalk); background: var(--chalk-soft); border-radius: var(--r-sm); padding: 10px 12px; display: grid; gap: 6px; font-size: 13px; }
+  .muse-note p { margin: 0; } .muse-note small { color: var(--muted); }
+  .muse-note ol, .muse-note ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .pill.muse { background: var(--surface); color: var(--chalk); justify-self: start; }
+  .pill svg { width: 12px; height: 12px; }
+  .toile-files { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  button.go.quiet:hover:not(:disabled) { background: var(--wash); }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .drop { border: 1.5px dashed var(--rule-strong); border-radius: var(--r-md); padding: 18px; text-align: center; cursor: pointer;
+          background: var(--sheet); display: grid; gap: 4px; justify-items: center; }
+  .drop.over { border-color: var(--chalk); background: var(--chalk-soft); }
+  .drop svg { width: 30px; height: 30px; color: var(--chalk); }
+
+  .callout { border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; display: flex; gap: 10px; align-items: start; border-left: 3px solid; }
+  .callout svg { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+  .callout.info { background: var(--chalk-soft); border-color: var(--chalk); }
+  .callout.warn { background: var(--tape-soft); border-color: var(--tape-ink); }
+  .callout.err { background: var(--brick-soft); border-color: var(--brick); }
+  .callout ul { margin: 4px 0 0; padding-left: 18px; }
+
+  .photo-preview { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .photo-preview img { width: 72px; height: 96px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--rule); }
+  .profile { border: 1px solid var(--rule); border-radius: var(--r-md); padding: 12px; display: grid; gap: 9px; background: var(--sheet); }
+  .profile-head { display: flex; align-items: center; gap: 10px; }
+  .profile-head svg { width: 28px; height: 28px; color: var(--ink-2); flex: none; }
+  .profile .evidence { font-size: 12px; color: var(--muted); font-style: italic; margin: -4px 0 0; }
+  .notes { margin: 0; padding-left: 18px; font-size: 12px; color: var(--muted); }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+          background: var(--wash); color: var(--ink-2); white-space: nowrap; }
+  .pill.pass { background: var(--leaf-soft); color: var(--leaf); } .pill.fail { background: var(--brick-soft); color: var(--brick); }
+
+  .verdict { display: flex; gap: 14px; align-items: center; }
+  .ring { --p: 0; width: 64px; height: 64px; border-radius: 50%; flex: none; display: grid; place-items: center;
+          background: conic-gradient(var(--ring) calc(var(--p) * 1%), var(--wash) 0); }
+  .ring::before { content: attr(data-label); width: 50px; height: 50px; border-radius: 50%; background: var(--surface); display: grid;
+                  place-items: center; font-weight: 800; font-size: 14px; font-stretch: 112%; }
+  .verdict h3 { margin: 0; font-size: 16px; }
+  .verdict p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+  .subtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); overflow-x: auto; margin: 0 -16px; padding: 0 12px; }
+  .subtabs button { border: 0; background: transparent; padding: 9px 9px 8px; font-weight: 700; font-size: 13px; color: var(--muted);
+                    border-bottom: 2px solid transparent; white-space: nowrap; }
+  .subtabs button.active { color: var(--ink); border-color: var(--tape-ink); }
+  .subtabs .count { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--wash); margin-left: 4px; }
+  .subtabs .count.fail { background: var(--brick-soft); color: var(--brick); }
+  .subpane { display: none; } .subpane.active { display: grid; gap: 12px; }
+  .group h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .checks { display: grid; gap: 6px; }
+  .check { border: 1px solid var(--rule); border-left: 3px solid var(--leaf); border-radius: var(--r-sm); padding: 8px 10px; display: grid; gap: 3px; background: var(--surface); }
+  .check.fail { border-left-color: var(--brick); background: var(--brick-soft); }
+  .check .row1 { display: flex; gap: 8px; align-items: center; }
+  .check .id { font-size: 11px; color: var(--faint); font-weight: 700; font-stretch: 75%; }
+  .check b { font-size: 13px; }
+  .check .state { margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; }
+  .check .state.pass { color: var(--leaf); } .check .state.fail { color: var(--brick); }
+  .check p { margin: 0; font-size: 12px; color: var(--muted); }
+  .gauge { display: flex; align-items: center; gap: 8px; font-size: 11px; font-stretch: 75%; font-variant-numeric: tabular-nums; }
+  .gauge .bar { flex: 1; height: 4px; border-radius: 4px; background: var(--wash); overflow: hidden; }
+  .gauge .bar i { display: block; height: 100%; background: var(--leaf); }
+  .check.fail .gauge .bar i { background: var(--brick); }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { position: relative; padding: 0 0 14px 28px; font-size: 13px; }
+  .timeline li::before { content: ""; position: absolute; left: 9px; top: 22px; bottom: 0; width: 2px; background: var(--rule); }
+  .timeline li:last-child::before { display: none; }
+  .timeline .tdot { position: absolute; left: 0; top: 1px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+                    font-size: 10.5px; font-weight: 800; color: #fff; background: var(--brick); }
+  .timeline .tdot.ok { background: var(--leaf); }
+  .timeline p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .kv code { font-size: 11.5px; background: var(--wash); padding: 1px 6px; border-radius: 4px; }
+  .instr { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: n; }
+  .instr li { counter-increment: n; display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; padding: 10px; border: 1px solid var(--rule); border-radius: var(--r-sm); font-size: 13px; }
+  .instr li::before { content: counter(n); grid-row: span 2; width: 24px; height: 24px; border-radius: 6px; background: var(--tape); color: var(--tape-ink); font-weight: 800; display: grid; place-items: center; font-size: 12px; }
+  .instr .where { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+
+  .downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  a.dl { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--rule-strong);
+         background: var(--surface); text-decoration: none; color: var(--ink); font-weight: 700; font-size: 13px; }
+  a.dl small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+  a.dl svg { width: 18px; height: 18px; flex: none; color: var(--chalk); }
+  a.dl.primary { background: var(--chalk); border-color: var(--chalk); color: #fff; } a.dl.primary svg, a.dl.primary small { color: #fff; }
+  a.dl.locked { opacity: .55; pointer-events: none; border-style: dashed; }
+  .signed { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--r-md); background: var(--tape-soft); color: var(--tape-ink); font-size: 12.5px; }
+  .signed svg { width: 28px; height: 28px; flex: none; }
+  .signed b { display: block; font-size: 14px; }
+
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { border: 1px solid var(--rule); border-radius: var(--r-sm); padding: 10px 12px; background: var(--sheet); }
+  .kpi span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+  .kpi b { display: block; font-size: 19px; font-stretch: 112%; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi small { font-size: 11px; color: var(--muted); }
+  .run-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .run-grid input { text-align: center; }
+  .run-grid label { text-align: center; font-weight: 800; font-stretch: 125%; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  table.data th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px; border-bottom: 1px solid var(--rule); }
+  table.data td { padding: 7px 6px; border-bottom: 1px solid var(--rule); }
+  table.data .r { text-align: right; }
+  .util { display: flex; align-items: center; gap: 6px; }
+  .util .bar { width: 46px; height: 5px; border-radius: 4px; background: var(--wash); overflow: hidden; }
+  .util .bar i { display: block; height: 100%; background: var(--tape-ink); }
+  .prints { display: grid; gap: 8px; }
+  .print-row { display: grid; grid-template-columns: 36px 1fr 1fr; gap: 8px; align-items: stretch; }
+  .print-row > b { display: grid; place-items: center; font-stretch: 125%; font-size: 14px; border-radius: var(--r-sm); background: var(--wash); }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--surface);
+           padding: 10px 16px; border-radius: var(--r-md); font-size: 13.5px; font-weight: 600; opacity: 0; transition: .2s; z-index: 50; pointer-events: none; max-width: calc(100vw - 32px); }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+
+  @media (max-width: 1180px) { :root { --panel-w: 390px; } .tagline { display: none; } }
+  @media (max-width: 960px) {
+    .studio { grid-template-columns: 1fr; height: auto; }
+    main.canvas.is-mat { height: 62vh; }
+    main.canvas.is-board { min-height: 50vh; }
+    .is-board .canvas-body { overflow: visible; }
+    aside.panel { border-left: 0; overflow: visible; }
+    .flow { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 520px) {
+    .top-row { padding: 10px 16px 2px; }
+    ol.stepper { padding: 6px 10px 10px; }
+    .step { min-width: 128px; }
+    aside.panel { padding: 12px 16px; }
+    .choices { grid-template-columns: repeat(2, 1fr); }
+    .job-chip { display: none; }
+    #mat-sub { display: none; }
+    .board { padding: 18px 16px; }
+    .empty h2 { font-size: 21px; }
+    .quick-row { grid-template-columns: 1fr; gap: 4px; }
+    .quick-row > span { padding: 0; }
+    .mat-scale { bottom: auto; top: 12px; }
+    .mat-sizes { top: auto; bottom: 12px; right: 12px; }
+    .canvas-body:has(.mat-sizes) .mat-legend { bottom: 54px; }
+    .mat-legend { gap: 8px; font-size: 10.5px; right: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11 M7 10l5 5 5-5 M5 20h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v6 M12 7.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5 M7 10l5-5 5 5 M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-factory" viewBox="0 0 24 24"><path d="M3 20V10l5 3V10l5 3V6h4l1 14z M3 20h18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="g-tshirt" viewBox="0 0 48 48"><path d="M17 6c1.5 3 4 4.5 7 4.5S29.5 9 31 6l9 4 4 9-6 3-2-3v23H12V19l-2 3-6-3 4-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="g-blouse" viewBox="0 0 48 48"><path d="M18 6c1.2 3.5 3.5 6 6 6s4.8-2.5 6-6l7 3 4 14-5 1-2-7 2 25H12l2-25-2 7-5-1 4-14z M18 24l5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="g-tunic" viewBox="0 0 48 48"><path d="M19 4c1 3 3 5 5 5s4-2 5-5l7 3 4 13-5 1-2-6 1 13 4 18H9l4-18 1-13-2 6-5-1 4-13z M19 22l4 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="g-shirt" viewBox="0 0 48 48"><path d="M17 5l7 5 7-5 9 5 5 12-6 3-3-6v24H12V19l-3 6-6-3 5-12z M24 10v32 M17 5l3 8 4-3 4 3 3-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="24" cy="20" r="1.2" fill="currentColor"/><circle cx="24" cy="28" r="1.2" fill="currentColor"/></symbol>
+  <symbol id="g-dress" viewBox="0 0 48 48"><path d="M18 4c1.2 3 3.5 5 6 5s4.8-2 6-5l6 3 3 9-5 2-1-4 1 9 7 22H7l7-22 1-9-1 4-5-2 3-9z M15 25h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+  <symbol id="g-skirt" viewBox="0 0 48 48"><path d="M15 8h18l1 5 8 25c-3 2-6 2-8 0-2 2-5 2-7 0-2 2-5 2-7 0-2 2-5 2-7 0-2 2-5 2-8 0l8-25z M14 13h20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="top-row">
+    <div class="wordmark"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" style="fill:var(--mat)"/><path d="M7 22c4-1 5-11 9-11s5 10 9 11" fill="none" style="stroke:var(--tape)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="2.6 2.4"/><circle cx="16" cy="11" r="2" style="fill:var(--tape)"/></svg>SEAMPROOF</div>
+    <span class="tagline">Dari ide baju sampai pola terverifikasi dan file potong untuk konveksi</span>
+    <span class="job-chip" id="job-chip"><i></i><span>Belum ada desain</span></span>
+  </div>
+  <nav aria-label="Langkah"><ol class="stepper" id="stepper"></ol></nav>
+</header>
+
+<div class="studio">
+  <main class="canvas is-board" id="canvas" aria-label="Meja kerja">
+    <div class="canvas-bar">
+      <b id="mat-title">MEJA DESAIN</b><span id="mat-sub"></span>
+      <div class="views" id="views" role="tablist" aria-label="Tampilan">
+        <button data-view="design" role="tab">Desain</button><button data-view="pattern" role="tab">Pola</button><button data-view="marker" role="tab">Denah</button>
+      </div>
+      <div class="tools" id="mat-tools" hidden><button data-z="out" aria-label="Perkecil">−</button><button data-z="in" aria-label="Perbesar">+</button><button data-z="fit">Pas</button></div>
+    </div>
+    <div class="canvas-body" id="mat"></div>
+  </main>
+
+  <aside class="panel" id="panel" aria-live="polite">
+    <!-- 1 Desain -->
+    <section class="step-pane" data-step="desain">
+      <div class="pane-head"><span class="kicker">Langkah 1 · Desain</span><h2>Mulai dari mana?</h2>
+        <p>Tulis ide, kirim foto contoh, atau pilih model dasar. Hasilnya sketsa flat yang bisa langsung dibuat polanya.</p></div>
+      <div class="seg" id="d-mode"><button data-mode="idea" class="active">Dari ide</button><button data-mode="photo">Dari foto</button><button data-mode="manual">Pilih sendiri</button></div>
+
+      <div class="sheet" data-dpane="idea">
+        <div><label class="label" for="d-brief">Brief desain</label>
+          <textarea id="d-brief" maxlength="2000" placeholder="Contoh: kemeja kerja wanita, kain adem, warna kalem, kerah bulat, ada saku"></textarea></div>
+        <div><span class="label">Atau mulai dari ide ini</span><div class="starters" id="d-starters"></div></div>
+        <div class="ai-note"><svg><use href="#i-spark"/></svg><span>Muse Spark memilih model, kerah, lengan dan warna. Pola tetap digambar oleh kode.</span></div>
+        <div id="d-err"></div>
+        <button class="go" id="d-go"><svg><use href="#i-spark"/></svg><span>Buat 2 opsi desain</span></button>
+      </div>
+
+      <div class="sheet" data-dpane="photo" hidden>
+        <div><span class="label">Foto contoh, sampai 3</span>
+          <div class="slots" id="f-slots"></div>
+          <input type="file" id="f-file" accept="image/*" multiple hidden>
+          <p class="hint" style="margin-top:6px">Foto baju dipakai orang, flat-lay atau sketsa. Tampak depan paling bagus. Wajah diburamkan sebelum dikirim.</p></div>
+        <div class="ai-note"><svg><use href="#i-spark"/></svg><span>Muse Wonder membaca kategori gaya tiap foto (tidak pernah ukuran). Bagian-bagiannya digabung oleh kode.</span></div>
+        <div id="f-merge" style="display:grid;gap:14px"></div>
+      </div>
+
+      <div class="sheet" data-dpane="manual" hidden>
+        <span class="label" style="margin:0">Model dasar</span>
+        <div class="choices" id="g-choices"></div>
+        <p class="hint">Detail (kerah, lengan, warna) diatur di langkah berikutnya.</p>
+      </div>
+      <div id="d-options"></div>
+    </section>
+
+    <!-- 2 Sempurnakan -->
+    <section class="step-pane" data-step="sempurnakan" hidden>
+      <div class="pane-head"><span class="kicker">Langkah 2 · Sempurnakan</span><h2>Ubah satu hal setiap kali</h2>
+        <p>Bagian lain tetap sama. Setiap perubahan jadi versi baru di bawah sketsa — klik untuk kembali.</p></div>
+      <div id="r-plan"></div>
+      <div class="sheet"><div><span class="label">Perubahan cepat</span><div class="quick" id="r-quick"></div></div>
+        <div><span class="label">Warna</span><div class="palette" id="r-palette" role="group" aria-label="Warna"></div></div></div>
+      <div class="sheet">
+        <div><label class="label" for="r-text">Atau tulis sendiri</label>
+          <textarea id="r-text" maxlength="300" style="min-height:64px" placeholder="Contoh: lengannya dibuat 3/4 pakai manset"></textarea></div>
+        <div id="r-err"></div>
+        <button class="go quiet small" id="r-go"><svg><use href="#i-spark"/></svg><span>Terapkan dengan Muse</span></button>
+      </div>
+      <button class="go" id="r-next"><span>Lanjut ke kain &amp; ukuran →</span></button>
+    </section>
+
+    <!-- 3 Kain & ukuran -->
+    <section class="step-pane" data-step="ukuran" hidden>
+      <div class="pane-head"><span class="kicker">Langkah 3 · Kain &amp; ukuran</span><h2>Untuk badan siapa?</h2>
+        <p id="u-for">Angka mm selalu dari ukuran, tidak pernah dari foto atau AI.</p></div>
+      <div class="sheet">
+        <div><span class="label">Kain</span><div class="fabric-list" id="u-fabric"></div></div>
+        <div style="display:grid;gap:8px"><button type="button" class="go quiet small" id="u-fab-go"><svg><use href="#i-spark"/></svg><span>Sarankan kain dengan Muse</span></button><div id="u-fab-out"></div></div>
+        <div><span class="label">Ukuran</span>
+          <div class="seg" id="u-mode"><button data-mode="size" class="active">Tabel</button><button data-mode="measures">Ukur sendiri</button><button data-mode="text">Teks bebas</button></div></div>
+        <div data-upane="size"><div class="sizes" id="u-size"></div><p class="hint" style="margin-top:8px">Nilai awal — ganti dengan data workshop.</p></div>
+        <div data-upane="measures" hidden>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="label" style="margin:0">Mulai dari</span><div class="sizes small" id="u-base" style="flex:1"></div></div>
+          <div style="display:grid;gap:8px;margin-bottom:10px"><button type="button" class="go quiet small" id="u-mphoto-go"><svg><use href="#i-upload"/></svg><span>Isi dari foto catatan ukuran (Muse Wonder)</span></button>
+            <input type="file" id="u-mphoto" accept="image/*" hidden><div id="u-mphoto-out"></div></div>
+          <div class="grid2" id="u-fields"></div>
+          <p class="hint" style="margin-top:8px">Kolom yang diubah ditandai biru.</p>
+        </div>
+        <div data-upane="text" hidden>
+          <textarea id="u-text" placeholder='mis. "lingkar dada 92, pinggang 74, panjang punggung 39 cm"'></textarea>
+          <div class="examples" id="u-examples"></div>
+        </div>
+        <div id="u-err"></div>
+        <button class="go" id="u-go"><svg><use href="#i-check"/></svg><span>Buat &amp; verifikasi pola</span></button>
+      </div>
+    </section>
+
+    <!-- 4 Bukti -->
+    <section class="step-pane" data-step="bukti" hidden>
+      <div class="pane-head"><span class="kicker">Langkah 4 · Bukti verifikasi</span><h2>Apakah pola ini bisa dijahit?</h2>
+        <p>Setiap pemeriksaan dihitung kode dari geometri pola. AI hanya menjelaskan dan mengusulkan perbaikan.</p></div>
+      <div id="out"></div>
+    </section>
+
+    <!-- 5 Cek -->
+    <section class="step-pane" data-step="cek" hidden>
+      <div class="pane-head"><span class="kicker">Langkah 5 · Cek &amp; unduh</span><h2>Pembuat pola memeriksa</h2>
+        <p>File potong dibuka setelah manusia memeriksa — AI tidak pernah menjadi pemeriksa terakhir.</p></div>
+      <div id="sign"></div>
+    </section>
+
+    <!-- 6 Produksi -->
+    <section class="step-pane" data-step="produksi" hidden>
+      <div class="pane-head"><span class="kicker">Langkah 6 · Produksi</span><h2>Paket produksi</h2>
+        <p id="p-for">Cut list, kebutuhan kain, biaya dan denah potong per ukuran.</p></div>
+      <div class="sheet">
+        <div><span class="label">Jatah per ukuran (potong)</span><div class="run-grid" id="p-run"></div></div>
+        <div class="grid2">
+          <div class="measure"><label for="p-width">Lebar kain</label><div class="unit" style="--u:'mm'"><input type="number" id="p-width" value="1500" min="300" step="10"></div></div>
+          <div class="measure"><label for="p-layers">Lapisan per gelar</label><input type="number" id="p-layers" value="1" min="1" step="1"></div>
+        </div>
+        <div class="measure"><label for="p-price">Harga kain per meter (Rp)</label><input type="number" id="p-price" value="45000" min="0" step="500"></div>
+        <button class="go" id="p-go"><svg><use href="#i-factory"/></svg><span>Hitung paket produksi</span></button>
+      </div>
+      <div id="p-out"></div>
+    </section>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+/* 3D design preview. Renders the spec from seamproof/preview3d.py as-is: rings become
+   lofted surfaces, sleeves become tubes. Visual only — no cloth physics or fit simulation. */
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+const SEG = 56, SUB = 6;
+const cr = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
+/** Smooth the ring stack vertically (Catmull-Rom on y, rx, rz) so lofts read as cloth, not cones. */
+function smoothRings(rings) {
+  if (rings.length < 3) return rings;
+  const out = [], get = i => rings[Math.max(0, Math.min(rings.length - 1, i))];
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < SUB; k++) {
+    const t = k / SUB, a = get(i - 1), b = get(i), c = get(i + 1), d = get(i + 2);
+    out.push({y: cr(a.y, b.y, c.y, d.y, t), rx: cr(a.rx, b.rx, c.rx, d.rx, t), rz: cr(a.rz, b.rz, c.rz, d.rz, t)});
+  }
+  out.push(rings[rings.length - 1]);
+  return out;
+}
+function loftGeo(rawRings) {
+  const rings = smoothRings(rawRings), pos = [], idx = [];
+  rings.forEach(r => { for (let j = 0; j <= SEG; j++) { const t = j / SEG * Math.PI * 2;
+    const y = r.scallop ? r.y - r.depth * (0.5 - 0.5 * Math.cos(r.scallop * t)) : r.y;
+    pos.push(r.rx * Math.sin(t), y, r.rz * Math.cos(t)); } });
+  for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < SEG; j++) {
+    const a = i * (SEG + 1) + j, b = a + SEG + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+function tubeGeo(path, radii) {
+  const curve = new THREE.CatmullRomCurve3(path.map(p => new THREE.Vector3(...p))), M = 48, R = 28;
+  const frames = curve.computeFrenetFrames(M, false), pos = [], idx = [];
+  for (let i = 0; i <= M; i++) {
+    const u = i / M, f = u * (radii.length - 1), k = Math.min(Math.floor(f), radii.length - 2);
+    const r = radii[k] + (radii[k + 1] - radii[k]) * (f - k), p = curve.getPointAt(u), n = frames.normals[i], b = frames.binormals[i];
+    for (let j = 0; j <= R; j++) { const t = j / R * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      pos.push(p.x + r * (c * n.x + s * b.x), p.y + r * (c * n.y + s * b.y), p.z + r * (c * n.z + s * b.z)); }
+  }
+  for (let i = 0; i < M; i++) for (let j = 0; j < R; j++) { const a = i * (R + 1) + j, b = a + R + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+function fanGeo(points) {
+  const c = points.reduce((a, p) => [a[0] + p[0] / points.length, a[1] + p[1] / points.length, a[2] + p[2] / points.length], [0, 0, 0]);
+  const pos = [...c, ...points.flat()], idx = [];
+  for (let i = 1; i <= points.length; i++) idx.push(0, i, i % points.length + 1);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+function build(spec) {
+  const root = new THREE.Group(), garment = new THREE.Group();
+  const base = new THREE.Color(spec.color);
+  const fabric = new THREE.MeshStandardMaterial({color: base, roughness: .84, metalness: 0, side: THREE.DoubleSide});
+  const trim = new THREE.MeshStandardMaterial({color: base.clone().multiplyScalar(.9), roughness: .8, side: THREE.DoubleSide});
+  const ink = new THREE.MeshStandardMaterial({color: base.clone().multiplyScalar(.62), roughness: .9});
+  const form = new THREE.MeshStandardMaterial({color: 0xd9d4c8, roughness: .95});
+  spec.lofts.forEach(l => garment.add(new THREE.Mesh(loftGeo(l.rings), l.trim ? trim : fabric)));
+  spec.tubes.forEach(t => garment.add(new THREE.Mesh(tubeGeo(t.path, t.radii), t.trim ? trim : fabric)));
+  spec.panels.forEach(p => garment.add(new THREE.Mesh(fanGeo(p.points), trim)));
+  spec.patches.forEach(p => garment.add(new THREE.Mesh(fanGeo(p.points), trim)));
+  const btn = new THREE.MeshStandardMaterial({color: 0xf7f5ef, roughness: .35});
+  spec.buttons.forEach(b => { const m = new THREE.Mesh(new THREE.SphereGeometry(.55, 16, 10), btn); m.position.set(...b); m.scale.z = .45; garment.add(m); });
+  spec.lines.forEach(l => garment.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(l.points.map(p => new THREE.Vector3(...p))), 64, .12, 6), ink)));
+  // Neutral dress form inside, with a pole and base standing on the floor below the hem.
+  const f = spec.form, bottom = f.rings[f.rings.length - 1];
+  root.add(new THREE.Mesh(loftGeo(f.rings), form));
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, bottom.y - f.floor_y, 12), form);
+  pole.position.y = (bottom.y + f.floor_y) / 2; root.add(pole);
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(9, 10, 1.2, 40), form); foot.position.y = f.floor_y; root.add(foot);
+  root.add(garment);
+  return {root, garment};
+}
+function mount(el, spec, opts = {}) {
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({antialias: true, alpha: true}); } catch { return null; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(28, 1, .1, 2000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb9b2a4, 1.15));
+  const key = new THREE.DirectionalLight(0xffffff, 1.55); key.position.set(40, 70, 90); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, .5); rim.position.set(-60, 30, -70); scene.add(rim);
+  const {root, garment} = build(spec); scene.add(root);
+  const box = new THREE.Box3().setFromObject(garment), size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+  // Frame the garment with room around it (the 28° fov is vertical; wide garments use the width).
+  const dist = Math.max(size.y, size.x * 1.05) / (2 * Math.tan(THREE.MathUtils.degToRad(14))) * 1.38;
+  const target = mid.clone();
+  const place = az => { const a = THREE.MathUtils.degToRad(az); camera.position.set(target.x + dist * Math.sin(a), target.y + dist * .12, target.z + dist * Math.cos(a)); camera.lookAt(target); };
+  place(opts.azimuth ?? 22);
+  el.prepend(renderer.domElement);
+  let controls = null;
+  if (opts.controls) {
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(target); controls.enablePan = false; controls.enableDamping = true;
+    controls.minDistance = dist * .45; controls.maxDistance = dist * 1.8;
+    controls.minPolarAngle = .35; controls.maxPolarAngle = Math.PI - .5;
+    controls.autoRotate = opts.autoRotate !== false; controls.autoRotateSpeed = 1.1;
+    controls.addEventListener("start", () => { controls.autoRotate = false; });
+    el.classList.add("orbit");
+  }
+  const resize = () => { const w = el.clientWidth || 1, h = el.clientHeight || 1; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  const ro = new ResizeObserver(resize); ro.observe(el); resize();
+  let spin = controls ? 0 : (opts.autoRotate === false ? 0 : .006), raf = 0, alive = true;
+  const tick = () => { if (!alive) return; if (controls) controls.update(); else if (spin) root.rotation.y += spin;
+    renderer.render(scene, camera); raf = requestAnimationFrame(tick); };
+  tick();
+  el.querySelector(".v3d-tools")?.addEventListener("click", e => {
+    const b = e.target.closest("button[data-az]"); if (!b) return;
+    if (controls) controls.autoRotate = false; root.rotation.y = 0; place(+b.dataset.az); controls?.target.copy(target); });
+  el.classList.add("ready");
+  return {dispose() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls?.dispose();
+    scene.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); }); renderer.dispose(); renderer.domElement.remove(); el.classList.remove("ready", "orbit"); }};
+}
+window.SP3D = {mount};
+window.dispatchEvent(new Event("sp3d-ready"));
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const num = (v, d = 1) => (v === null || v === undefined) ? "–" : Number(v).toLocaleString("id-ID", {maximumFractionDigits: d});
+const rupiah = v => new Intl.NumberFormat("id-ID", {style: "currency", currency: "IDR", maximumFractionDigits: 0}).format(v);
+const icon = id => `<svg><use href="#${id}"/></svg>`;
+// Flats come from the server as SVG text; shown through <img> so nothing in them can run.
+const flatSrc = svg => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg || "");
+/* 3D previews on the design table. Each board render registers the plans it shows; the
+   three.js module (window.SP3D) mounts them. Without WebGL or the CDN the flat stays visible. */
+const PV = [];
+function pvHtml(plan, alt, opts = {}) {
+  const i = PV.push({spec: plan.preview3d, opts}) - 1;
+  return `<div class="v3d" data-pv="${i}"><img class="v3d-fallback" src="${flatSrc(plan.flat)}" alt="${esc(alt)}">
+    <span class="v3d-badge">3D</span>${opts.controls ? `<span class="v3d-hint">Geser untuk memutar</span>
+    <div class="v3d-tools"><button data-az="0">Depan</button><button data-az="90">Samping</button><button data-az="180">Belakang</button></div>` : ""}</div>`;
+}
+function mount3d(root) {
+  if (!window.SP3D) return;
+  root.querySelectorAll(".v3d[data-pv]").forEach(el => {
+    const p = PV[+el.dataset.pv];
+    if (el._v3d || !p?.spec) return;
+    el._v3d = window.SP3D.mount(el, p.spec, p.opts);
+  });
+}
+function unmount3d(root) { root.querySelectorAll(".v3d").forEach(el => { el._v3d?.dispose(); el._v3d = null; }); PV.length = 0; }
+window.addEventListener("sp3d-ready", () => mount3d($("mat")));
+
+const GARMENTS = [
+  {id: "shirt", name: "Kemeja", sub: "Kancing, kerah, saku"}, {id: "blouse", name: "Blus", sub: "Kupnat dada"},
+  {id: "tunic", name: "Tunik", sub: "Blus panjang"}, {id: "skirt", name: "Rok", sub: "A-line, scallop"},
+  {id: "dress", name: "Dress", sub: "Terusan, ritsleting sisi"}, {id: "tshirt", name: "Kaos", sub: "Unisex, rajut"},
+];
+const GNAME = Object.fromEntries(GARMENTS.map(g => [g.id, g.name]));
+const BLOCKS = ["tshirt", "blouse", "tunic"];
+const TOP_BASE = {collar: "none", opening: "none", sleeve_length: "short", shoulder: "set_in", fit: "regular", length: "hip",
+                  pockets: 0, cuff: false, contrast_collar: false, contrast_cuff: false};
+const DEFAULTS = {
+  shirt: {part: "top", features: {...TOP_BASE, collar: "shirt_collar", opening: "button_front"}, color: "putih"},
+  blouse: {part: "top", features: {...TOP_BASE, fit: "fitted", sleeve_length: "long"}, color: "dusty_pink"},
+  tunic: {part: "top", features: {...TOP_BASE, fit: "fitted", sleeve_length: "long", length: "knee"}, color: "sage"},
+  tshirt: {part: "top", features: {...TOP_BASE}, color: "hitam"},
+  skirt: {part: "bottom", features: {silhouette: "a_line", length: "knee", hem: "straight", waistband: false}, color: "navy"},
+  dress: {part: "dress", features: {collar: "none", opening: "none", sleeve_length: "short", shoulder: "set_in", fit: "regular",
+          pockets: 0, cuff: false, contrast_collar: false, contrast_cuff: false, silhouette: "a_line", length: "knee",
+          hem: "straight", waist_seam: true}, color: "terracotta"},
+};
+const PART_LABEL = {top: "Atasan", bottom: "Bawahan", dress: "Dress"};
+// Quick-change rows per part; block tops only switch kind, collar and opening.
+const QUICK_KEYS = {bottom: ["silhouette", "length", "hem"], dress: ["sleeve_length", "silhouette", "length", "hem"],
+                    block: ["collar", "opening"], top: ["collar", "sleeve_length", "sleeve_style", "fit", "length", "shoulder"]};
+const SPEC_KEYS = {bottom: ["silhouette", "length", "hem", "waistband"], dress: ["sleeve_length", "silhouette", "length", "hem", "waist_seam"],
+                   top: ["collar", "opening", "sleeve_length", "sleeve_style", "shoulder", "fit", "length", "pockets", "cuff", "elastic_cuff"]};
+const STARTERS = [
+  "Kemeja kerja wanita dari linen, warna sage, kerah runcing, lengan pendek, satu saku dada",
+  "Blus seragam kantor warna dusty pink, pas badan, lengan panjang",
+  "Rok A-line selutut warna navy dengan kelim scallop dan ban pinggang",
+  "Kemeja boxy oversize warna mocca, bahu turun, kerah peter pan, dua saku",
+];
+const FABRICS = {knit_low_stretch: ["Rajut, sedikit melar", "Kaos katun combed, pique"],
+                 knit_high_stretch: ["Rajut, sangat melar", "Spandex, jersey elastis"],
+                 woven: ["Tenun (woven)", "Katun, linen, rayon, toyobo"]};
+const LABELS = {chest: "Lingkar dada", bust: "Lingkar dada", high_bust: "Lingkar dada atas", waist: "Lingkar pinggang",
+  hip: "Lingkar pinggul", shoulder_width: "Lebar bahu", shoulder_length: "Panjang bahu", front_length: "Panjang muka",
+  back_length: "Panjang punggung", apex_height: "Tinggi puncak dada", apex_distance: "Jarak puncak dada",
+  waist_to_hip: "Pinggang–pinggul", armhole_depth: "Dalam kerung lengan", sleeve_length: "Panjang lengan",
+  neck_width: "Lebar leher", bicep: "Lingkar lengan atas", wrist: "Lingkar pergelangan"};
+const GROUPS = {G: "Geometri", S: "Kampuh, kerah & lengan", W: "Ukuran badan", D: "Kupnat", K: "Rok", N: "Notch", R: "Arah serat"};
+const EXAMPLES = {tshirt: "lingkar dada 100, pinggang 90, pinggul 98, lebar bahu 45, panjang baju 70, lengan 21 cm",
+                  default: "dada 92, dada atas 86, pinggang 74, pinggul 98, bahu 38, panjang punggung 39 cm"};
+const FEATURE_LABELS = {kind: "Jenis", collar: "Kerah", opening: "Bukaan", sleeve_length: "Lengan", shoulder: "Bahu", fit: "Siluet",
+  length: "Panjang", pockets: "Saku", silhouette: "Siluet", hem: "Kelim", cuff: "Manset", contrast_collar: "Kerah kontras",
+  contrast_cuff: "Manset kontras", waistband: "Ban pinggang", waist_seam: "Sambungan pinggang", color: "Warna",
+  sleeve_style: "Model lengan", elastic_cuff: "Manset karet"};
+const VALUE_LABELS = {none: "Tanpa", shirt_collar: "Runcing", peter_pan: "Peter pan", band: "Tegak", other: "Lainnya",
+  button_front: "Kancing depan", sleeveless: "Tanpa lengan", short: "Pendek", elbow: "Siku", three_quarter: "3/4", long: "Panjang",
+  set_in: "Biasa", dropped: "Turun", fitted: "Pas badan", regular: "Reguler", boxy: "Boxy", waist: "Pinggang",
+  high_hip: "Pinggul atas", hip: "Pinggul", thigh: "Paha", knee: "Lutut", below_knee: "Bawah lutut", straight: "Lurus",
+  a_line: "A-line", flared: "Lebar (flare)", mini: "Mini", above_knee: "Atas lutut", midi: "Midi", maxi: "Maxi",
+  scalloped: "Scallop", dress: "Dress", shirt: "Kemeja", tshirt: "Kaos", blouse: "Blus", tunic: "Tunik", skirt: "Rok", trousers: "Celana",
+  bishop: "Bishop (kerut ke manset)", puff: "Puff (kerut bahu + manset)", true: "Ya", false: "Tidak"};
+const vlabel = (k, v) => k === "color" ? (S.catalog?.colors[v]?.name || v) : k === "pockets" ? String(v) : (VALUE_LABELS[String(v)] ?? String(v));
+const STEPS = [{id: "desain", title: "Desain"}, {id: "sempurnakan", title: "Sempurnakan"}, {id: "ukuran", title: "Kain & ukuran"},
+               {id: "bukti", title: "Bukti verifikasi"}, {id: "cek", title: "Cek & unduh"}, {id: "produksi", title: "Produksi"}];
+
+const S = {step: "desain", dmode: "idea", view: "design", viewPinned: false, catalog: null, options: null,
+           versions: [], vi: -1, garment: null, style: null, styleLabel: "", fabric: null, fabricFor: null, meta: null,
+           umode: "size", size: "M", photos: [], merge: {base: null, part: null, assign: {}, notes: "", result: null, error: ""},
+           pack: null, body: null, svg: "", signoff: null, production: null, markerSize: null};
+const cur = () => S.versions[S.vi] || null;
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3200); }
+function errorHtml(detail) {
+  if (detail && typeof detail === "object" && !Array.isArray(detail) && detail.missing) {
+    return `<b>Ukuran belum lengkap.</b><ul>${detail.missing.map(k => `<li>${esc(LABELS[k] || k)}</li>`).join("")}</ul>` +
+      ((detail.warnings || []).length ? `<ul>${detail.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : "");
+  }
+  if (Array.isArray(detail)) return "Input tidak valid: " + esc(detail.map(d => `${(d.loc || []).slice(-1)[0] ?? ""} ${d.msg ?? ""}`).join("; "));
+  return esc(detail || "Terjadi kesalahan.");
+}
+const callout = (kind, html) => `<div class="callout ${kind}">${icon("i-info")}<div>${html}</div></div>`;
+async function api(url, opts) {
+  let res;
+  try { res = await fetch(url, opts); } catch { throw {html: "Server tidak bisa dihubungi. Pastikan <b>python -m seamproof server</b> masih berjalan."}; }
+  let data = null; try { data = await res.json(); } catch {}
+  if (!res.ok) throw {html: errorHtml(data?.detail ?? `HTTP ${res.status}`)};
+  return data;
+}
+const jpost = (url, body) => api(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+function busy(btn, on, label) {
+  btn.disabled = on;
+  if (on) { btn.dataset.html = btn.innerHTML; btn.innerHTML = `<span class="spinner"></span><span>${label}</span>`; }
+  else if (btn.dataset.html) btn.innerHTML = btn.dataset.html;
+}
+const passed = p => p.checks.filter(c => c.passed).length;
+const styleOf = d => ({part: d.part, kind: d.kind, features: {...d.features}});
+const museTag = src => src === "muse" ? `<span class="pill muse">${icon("i-spark")} Ditulis Muse · angka dicek kode</span>`
+                                      : `<span class="pill">Teks cadangan dari kode (Muse tidak tersedia)</span>`;
+
+/* ---------- stepper + header ---------- */
+function stepState() {
+  const p = S.pack, d = cur();
+  return {
+    desain: d ? {done: true, text: d.name} : {text: "Ide, foto atau model dasar"},
+    sempurnakan: d ? {done: !!S.garment, text: `v${S.vi + 1} · ${d.plan.label}`} : {text: "Pilih desain dulu", locked: true},
+    ukuran: p ? {done: true, text: `${S.body.mode === "size" ? S.body.size : "Ukuran sendiri"} · ${FABRICS[S.body.fabric]?.[0] || ""}`}
+              : {text: S.garment ? "Pilih kain dan ukuran" : "Sempurnakan dulu", locked: !S.garment},
+    bukti: p ? {done: p.passed, bad: !p.passed, text: `${passed(p)}/${p.checks.length} lulus`} : {text: "Belum ada pola", locked: true},
+    cek: S.signoff ? {done: true, text: `Dicek ${S.signoff.name}`}
+                   : {text: p ? (p.passed ? "Menunggu pembuat pola" : "Pola belum lulus") : "Belum ada pola", locked: !p},
+    produksi: S.production ? {done: true, text: `${S.production.pieces} potong · ${num(S.production.total_metres, 1)} m`}
+                           : {text: S.garment ? "Hitung kain & biaya" : "Sempurnakan dulu", locked: !S.garment},
+  };
+}
+function renderStepper() {
+  const st = stepState();
+  $("stepper").innerHTML = STEPS.map((s, i) => {
+    const x = st[s.id];
+    return `<li style="display:flex;flex:1 1 0"><button class="step ${x.done ? "done" : ""} ${x.bad ? "bad" : ""}" data-step="${s.id}" ${s.id === S.step ? 'aria-current="step"' : ""} ${x.locked ? "disabled" : ""}>
+      <span class="step-num">${x.done ? icon("i-tick") : x.locked ? icon("i-lock") : i + 1}</span>
+      <span class="step-title">${esc(s.title)}</span><span class="step-state">${esc(x.text)}</span></button></li>`;
+  }).join("");
+  const p = S.pack, d = cur(), chip = $("job-chip");
+  chip.className = "job-chip" + (p ? (p.passed ? " pass" : " fail") : "") + (S.signoff ? " signed" : "");
+  chip.querySelector("span").textContent = p
+    ? `${GNAME[S.body.garment]} ${S.body.size || ""} · ${p.passed ? "LULUS" : "GAGAL"} ${passed(p)}/${p.checks.length}${S.signoff ? " · dicek " + S.signoff.name : ""}`
+    : d ? `${d.name} · v${S.vi + 1}` : "Belum ada desain";
+}
+$("stepper").onclick = e => { const b = e.target.closest("button[data-step]"); if (b && !b.disabled) go(b.dataset.step); };
+function go(step) {
+  S.step = step; S.viewPinned = false;
+  document.querySelectorAll(".step-pane").forEach(p => p.hidden = p.dataset.step !== step);
+  if (step === "sempurnakan") renderRefine();
+  renderStepper(); renderCanvas();
+  $("panel").scrollTop = 0;
+}
+
+/* ---------- canvas: design table, pattern mat, marker ---------- */
+let view = null;
+function autoView() {
+  if (S.viewPinned) return S.view;
+  if (S.step === "produksi" && S.production) return "marker";
+  if (["bukti", "cek", "produksi"].includes(S.step) && S.svg) return "pattern";
+  return "design";
+}
+function renderCanvas() {
+  const mat = $("mat"), canvas = $("canvas");
+  S.view = autoView();
+  const avail = {design: true, pattern: !!S.svg, marker: !!S.production};
+  if (!avail[S.view]) S.view = "design";
+  $("views").querySelectorAll("button").forEach(b => { b.disabled = !avail[b.dataset.view]; b.classList.toggle("active", b.dataset.view === S.view);
+                                                         b.setAttribute("aria-selected", b.dataset.view === S.view); });
+  unmount3d(mat);
+  view = null; $("mat-tools").hidden = true; mat.classList.remove("has-svg"); mat.scrollTop = 0;
+  mat.onwheel = mat.onpointerdown = mat.onpointermove = mat.onpointerup = mat.onpointercancel = null;
+  canvas.classList.toggle("is-mat", S.view !== "design"); canvas.classList.toggle("is-board", S.view === "design");
+  if (S.view === "marker") {
+    const sizes = S.production.sizes;
+    if (!sizes.some(s => s.size === S.markerSize)) S.markerSize = sizes[0].size;
+    const it = sizes.find(s => s.size === S.markerSize);
+    $("mat-title").textContent = "DENAH POTONG";
+    $("mat-sub").textContent = `· ${it.size} · lebar ${num(S.production.width, 0)} mm × ${num(it.length_mm / 1000, 2)} m · ${it.pieces} potongan · utilisasi ${num(it.utilisation * 100, 1)}%`;
+    mountPattern(mat, S.production.markers[it.size], LEGEND_MARKER);
+    mat.insertAdjacentHTML("beforeend", `<div class="mat-sizes" role="group" aria-label="Pilih ukuran">${sizes.map(s =>
+      `<button data-size="${esc(s.size)}" class="${s.size === it.size ? "active" : ""} ${s.verified ? "" : "bad"}" aria-pressed="${s.size === it.size}">${esc(s.size)}</button>`).join("")}</div>`);
+    mat.querySelector(".mat-sizes").onclick = e => { const b = e.target.closest("button[data-size]"); if (b) { S.markerSize = b.dataset.size; renderCanvas(); } };
+    return;
+  }
+  if (S.view === "pattern") {
+    $("mat-title").textContent = "ALAS POTONG";
+    $("mat-sub").textContent = `· ${GNAME[S.body.garment]} ${S.body.size || ""} · grid 10 mm asli`;
+    mountPattern(mat, S.svg); return;
+  }
+  $("mat-title").textContent = "MEJA DESAIN";
+  const d = cur();
+  $("mat-sub").textContent = d ? `· ${d.name} · versi ${S.vi + 1} dari ${S.versions.length}` : "";
+  mat.innerHTML = `<div class="board">${boardHtml()}</div>`;
+  mount3d(mat);
+}
+function boardHtml() {
+  const d = cur();
+  if (S.step === "desain" && S.options && S.dmode === "idea") {
+    return `<div class="options">${S.options.map((o, i) => `<button class="opt" data-opt="${i}" aria-pressed="${d?.optIndex === i && d?.source === "muse"}">
+      ${pvHtml(o.plan, `Pratinjau ${o.name}`, {controls: false})}
+      <div class="opt-head"><span class="tag">${"AB"[i]}</span><b>${esc(o.name)}</b>
+        <span class="pill ${o.plan.garment ? "pass" : "fail"}" style="margin-left:auto">${esc(o.plan.label)}</span></div>
+      <p><span class="swatch" style="background:${esc(S.catalog?.colors[o.color]?.hex || "#eee")}"></span> ${esc(vlabel("color", o.color))}${o.reason ? " · " + esc(o.reason) : ""}</p>
+      ${o.unsupported?.length ? `<p class="hint" style="color:var(--tape-ink)"><b>${o.unsupported.length} detail belum bisa dibuat pola</b> — lihat panel kanan.</p>` : ""}
+    </button>`).join("")}</div><p class="hint">Klik salah satu opsi untuk melanjutkan.</p>`;
+  }
+  if (S.step === "desain" && S.dmode === "photo" && S.photos.length) return compareHtml();
+  if (d) {
+    const f = d.plan.drafted || d.features, keys = SPEC_KEYS[d.part] || SPEC_KEYS.top;
+    const specs = keys.filter(k => k in f).map(k => `<span><b>${esc(FEATURE_LABELS[k])}</b>${esc(vlabel(k, f[k]))}</span>`).join("");
+    const changes = d.changes?.length ? `<div class="changes">${d.changes.map(c => `<span>${esc(FEATURE_LABELS[c.key] || c.key)}: ${esc(vlabel(c.key, c.from))} → ${esc(vlabel(c.key, c.to))}</span>`).join("")}</div>` : "";
+    return `<div class="hero"><div class="hero-head"><span class="ver">v${S.vi + 1}</span><h2>${esc(d.name)}</h2>
+        <span class="pill ${d.plan.garment ? "pass" : "fail"}">${d.plan.garment ? "Pola: " + esc(d.plan.label) : "Belum didukung"}</span>
+        <span class="muted" style="font-size:12.5px;margin-left:auto"><span class="swatch" style="background:${esc(S.catalog?.colors[d.color]?.hex || "#eee")}"></span> ${esc(vlabel("color", d.color))}</span>
+        <div class="pv-seg" role="group" aria-label="Tampilan desain"><button data-pvmode="3d" aria-pressed="${S.pv !== "flat"}">3D</button><button data-pvmode="flat" aria-pressed="${S.pv === "flat"}">Flat</button></div></div>
+      ${S.pv === "flat" ? `<img src="${flatSrc(d.plan.flat)}" alt="Sketsa flat depan dan belakang">` : pvHtml(d.plan, "Pratinjau 3D desain", {controls: true})}
+      <div class="specs">${specs}</div>${provHtml(d)}${changes}${d.reason ? `<p class="hint">Muse: ${esc(d.reason)}</p>` : ""}${gapHtml(d.unsupported)}</div>
+      ${S.versions.length > 1 ? `<div class="versions" role="list" aria-label="Versi desain">${S.versions.map((v, i) =>
+        `<button class="vthumb" role="listitem" data-v="${i}" aria-current="${i === S.vi}"><img src="${flatSrc(v.plan.flat)}" alt="">
+          <b>v${i + 1}</b><span>${esc(i === 0 ? v.name : (v.changes || []).map(c => `${FEATURE_LABELS[c.key] || c.key} ${vlabel(c.key, c.to)}`).join(", ") || "–")}</span></button>`).join("")}</div>` : ""}`;
+  }
+  return `<div class="empty">
+    <svg viewBox="0 0 120 80" width="140" aria-hidden="true"><path d="M30 14c4 6 10 8 14 8s10-2 14-8l14 6 8 16-10 4-4-6v32H30V34l-4 6-10-4 8-16z" fill="none" style="stroke:var(--ink-2)" stroke-width="1.6" stroke-dasharray="3 2.5" stroke-linejoin="round"/>
+      <circle cx="96" cy="58" r="12" style="fill:var(--leaf)"/><path d="M90 58l4 4 8-8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h2>Dari ide baju ke pola yang terbukti, sebelum kain dipotong</h2>
+    <p>Tulis ide atau kirim foto. Kode menggambar pola dan memeriksa kampuh, kerah, kupnat, notch dan ukuran. Pembuat pola mengecek sebelum file potong dibuka.</p>
+    <div class="flow"><div><b>Desain</b>Ide, foto atau model dasar, pratinjau 3D<span class="ai">Muse Spark · Wonder</span></div>
+      <div><b>Sempurnakan</b>Satu perubahan per versi<span class="ai">Muse Spark</span></div>
+      <div><b>Pola</b>Digambar &amp; diverifikasi kode<span class="ai">deterministik</span></div>
+      <div><b>Produksi</b>Cut list, kain, biaya, marker<span class="ai">deterministik</span></div></div></div>`;
+}
+$("mat").addEventListener("click", e => {
+  const pm = e.target.closest("button[data-pvmode]");
+  if (pm) { S.pv = pm.dataset.pvmode; renderCanvas(); return; }
+  const o = e.target.closest("button[data-opt]");
+  if (o) { chooseOption(+o.dataset.opt); return; }
+  const v = e.target.closest("button[data-v]");
+  if (v) { setVersion(+v.dataset.v); }
+});
+$("views").onclick = e => { const b = e.target.closest("button[data-view]"); if (!b || b.disabled) return; S.view = b.dataset.view; S.viewPinned = true; renderCanvas(); };
+
+/** Mount the server SVG (viewBox in mm) on the mat with a true 10 mm grid, pan and zoom. */
+const LEGEND_PATTERN = `<span><i style="border-color:var(--mat-ink)"></i>Garis potong</span><span><i style="border-color:var(--mat-muted);border-top-style:dashed"></i>Garis jahit</span><span><i style="border-color:var(--tape)"></i>Arah serat</span><span><i style="border-color:#fff;width:6px;border-top-width:3px"></i>Notch</span>`;
+const LEGEND_MARKER = LEGEND_PATTERN + `<span><i style="border-color:#9fc0e6;border-top-style:dashed"></i>Garis lipatan (dibuka)</span>`;
+function mountPattern(wrap, svgText, legend = LEGEND_PATTERN) {
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (svg.nodeName !== "svg") return;
+  svg.querySelectorAll("script, foreignObject").forEach(n => n.remove());
+  const vb = (svg.getAttribute("viewBox") || "0 0 100 100").split(/[\s,]+/).map(Number);
+  svg.removeAttribute("width"); svg.removeAttribute("height");
+  svg.setAttribute("class", "pattern"); svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  const NS = "http://www.w3.org/2000/svg";
+  const defs = doc.createElementNS(NS, "defs");
+  defs.innerHTML = `<pattern id="g10" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" style="stroke:var(--grid)" stroke-width=".4"/></pattern>
+    <pattern id="g100" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="url(#g10)"/><path d="M100 0H0V100" fill="none" style="stroke:var(--grid-major)" stroke-width=".8"/></pattern>`;
+  const bg = doc.createElementNS(NS, "rect"), pad = 3000;
+  bg.setAttribute("x", vb[0] - pad); bg.setAttribute("y", vb[1] - pad); bg.setAttribute("width", vb[2] + pad * 2);
+  bg.setAttribute("height", vb[3] + pad * 2); bg.setAttribute("fill", "url(#g100)");
+  svg.insertBefore(bg, svg.firstChild); svg.insertBefore(defs, svg.firstChild);
+  wrap.innerHTML = `<span class="mat-hover" id="hover"></span>
+    <div class="mat-legend">${legend}</div>
+    <span class="mat-scale" id="scale"></span>`;
+  const node = document.importNode(svg, true);
+  wrap.insertBefore(node, wrap.firstChild); wrap.classList.add("has-svg"); $("mat-tools").hidden = false;
+  const home = [vb[0] - 30, vb[1] - 30, vb[2] + 60, vb[3] + 60];
+  view = home.slice();
+  const apply = () => {
+    node.setAttribute("viewBox", view.join(" "));
+    const pxPerMm = Math.min(wrap.clientWidth / view[2], wrap.clientHeight / view[3]);
+    const sc = $("scale"); if (sc) sc.textContent = `≈ ${(pxPerMm / (96 / 25.4) * 100).toFixed(0)}% dari 1:1 · ${(vb[2] / 10).toFixed(0)} × ${(vb[3] / 10).toFixed(0)} cm`;
+  };
+  const zoom = (k, cx = .5, cy = .5) => {
+    const w = Math.min(Math.max(view[2] * k, 40), home[2] * 4), h = w * (view[3] / view[2]);
+    view = [view[0] + (view[2] - w) * cx, view[1] + (view[3] - h) * cy, w, h]; apply();
+  };
+  $("mat-tools").onclick = e => { const z = e.target.dataset.z; if (z === "in") zoom(.7); else if (z === "out") zoom(1 / .7); else if (z === "fit") { view = home.slice(); apply(); } };
+  wrap.onwheel = e => { e.preventDefault(); const r = wrap.getBoundingClientRect(); zoom(e.deltaY > 0 ? 1.15 : 1 / 1.15, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
+  let drag = null;
+  wrap.onpointerdown = e => { if (e.target.closest("button")) return; drag = {x: e.clientX, y: e.clientY, v: view.slice()}; wrap.setPointerCapture(e.pointerId); wrap.classList.add("drag"); };
+  wrap.onpointermove = e => {
+    if (drag) { const s = Math.max(view[2] / wrap.clientWidth, view[3] / wrap.clientHeight);
+      view = [drag.v[0] - (e.clientX - drag.x) * s, drag.v[1] - (e.clientY - drag.y) * s, view[2], view[3]]; apply(); return; }
+    const g = e.target.closest && e.target.closest("g[id], g[data-name]"), tag = $("hover");
+    if (tag) { if (g) { tag.textContent = "Panel: " + (g.dataset.name || g.id); tag.style.opacity = 1; } else tag.style.opacity = 0; }
+  };
+  wrap.onpointerup = wrap.onpointercancel = () => { drag = null; wrap.classList.remove("drag"); };
+  if (!wrap._ro) { wrap._ro = new ResizeObserver(() => { if (view && wrap.classList.contains("has-svg")) apply(); }); wrap._ro.observe(wrap); }
+  apply();
+}
+
+/* ---------- design versions ---------- */
+/** Any design change makes downstream packs stale: drop them so nothing old is cut. */
+function invalidate() {
+  const had = !!S.pack || !!S.production;
+  Object.assign(S, {garment: null, style: null, styleLabel: "", pack: null, body: null, svg: "", signoff: null, production: null});
+  $("out").innerHTML = ""; $("sign").innerHTML = ""; $("p-out").innerHTML = "";
+  if (had) toast("Desain berubah — pola lama dihapus, buat ulang di langkah 3.");
+}
+function addVersion(v, fresh = false) {
+  if (fresh) S.versions = [];
+  else S.versions = S.versions.slice(0, S.vi + 1);
+  S.versions.push(v); S.vi = S.versions.length - 1;
+  invalidate();
+}
+function setVersion(i) { if (i === S.vi) return; S.vi = i; invalidate(); if (S.step === "sempurnakan") renderRefine(); renderStepper(); renderCanvas(); }
+function diffClient(a, b) {
+  const out = [];
+  if (a.kind !== b.kind) out.push({key: "kind", from: a.kind, to: b.kind});
+  Object.keys(b.features).forEach(k => { if (a.features[k] !== b.features[k]) out.push({key: k, from: a.features[k], to: b.features[k]}); });
+  if (a.color !== b.color) out.push({key: "color", from: a.color, to: b.color});
+  return out;
+}
+
+/* ---------- step 1: desain ---------- */
+$("d-mode").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return; S.dmode = b.dataset.mode;
+  $("d-mode").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("[data-dpane]").forEach(p => p.hidden = p.dataset.dpane !== S.dmode);
+  renderOptionsPanel(); renderCanvas();
+};
+$("d-starters").innerHTML = STARTERS.map(t => `<button type="button">${esc(t)}</button>`).join("");
+$("d-starters").onclick = e => { const b = e.target.closest("button"); if (b) { $("d-brief").value = b.textContent; $("d-brief").focus(); } };
+$("d-go").onclick = async () => {
+  const brief = $("d-brief").value.trim();
+  if (brief.length < 3) { toast("Tulis brief desain dulu."); $("d-brief").focus(); return; }
+  const btn = $("d-go"); busy(btn, true, "Muse merancang 2 opsi…"); $("d-err").innerHTML = "";
+  try {
+    const r = await jpost("/api/design", {brief});
+    S.options = r.options.map((o, i) => ({...o, optIndex: i, source: "muse", changes: []}));
+    renderOptionsPanel(); renderCanvas();
+  } catch (e) { $("d-err").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); }
+};
+/** Brief details no category (so no pattern) can show — said plainly so the sketch never over-promises. */
+function gapHtml(list, compact = false) {
+  if (!list?.length) return "";
+  return `<div class="callout warn">${icon("i-info")}<div><b>Belum bisa dibuat pola</b>${compact ? "" : " — sketsa dan pola tidak menampilkan ini:"}
+    <ul>${list.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div></div>`;
+}
+const mergeGaps = (a = [], b = []) => [...new Set([...a, ...b])];
+function renderOptionsPanel() {
+  const el = $("d-options");
+  if (S.dmode !== "idea" || !S.options) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="sheet"><h3>${S.options.length} opsi dari Muse</h3>${S.options.map((o, i) => `<div class="profile">
+      <div class="profile-head">${o.plan.garment ? `<svg><use href="#g-${o.plan.garment}"/></svg>` : icon("i-info")}<b>${"AB"[i]} · ${esc(o.name)}</b>
+        <span class="pill ${o.plan.garment ? "pass" : "fail"}" style="margin-left:auto">${o.plan.garment ? "bisa digambar" : "belum didukung"}</span></div>
+      ${gapHtml(o.unsupported, true)}
+      ${o.plan.notes.length ? `<ul class="notes">${o.plan.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+      <button class="go small" data-opt="${i}">Pilih opsi ${"AB"[i]} →</button></div>`).join("")}</div>`;
+}
+$("d-options").onclick = e => { const b = e.target.closest("button[data-opt]"); if (b) chooseOption(+b.dataset.opt); };
+function chooseOption(i) {
+  const o = S.options[i];
+  addVersion({...o, features: {...o.features}}, true);
+  go("sempurnakan");
+}
+
+$("g-choices").innerHTML = GARMENTS.map(g => `<div class="choice"><input type="radio" name="g" id="gc-${g.id}" value="${g.id}">
+  <label for="gc-${g.id}"><svg><use href="#g-${g.id}"/></svg><b>${g.name}</b><span>${g.sub}</span></label></div>`).join("");
+$("g-choices").onchange = async e => {
+  const g = e.target.value, base = DEFAULTS[g];
+  try {
+    const r = await jpost("/api/style-plan", {part: base.part, kind: g, features: base.features, color: base.color});
+    addVersion({name: `${GNAME[g]} dasar`, part: base.part, kind: r.kind, features: r.features, color: base.color,
+                fabric: null, plan: r.plan, source: "manual", changes: []}, true);
+    go("sempurnakan");
+  } catch (err) { toast("Gagal memuat model dasar."); }
+};
+
+/* Photos -> one design: each photo is read by Muse Wonder; the user picks which photo
+   gives each part; /api/design/merge combines the categories in code (no model). */
+const MAX_PHOTOS = 3;
+// Which other parts can lend features (sleeves, collar...) to a target part.
+const LENDS = {top: ["top", "dress"], bottom: ["bottom", "dress"], dress: ["dress", "top", "bottom"]};
+const photoOk = p => p.status === "ok";
+function sourceFor(photo, part) {
+  for (const want of LENDS[part]) { const piece = photo.pieces.find(x => x.part === want); if (piece) return piece; }
+  return null;
+}
+function renderSlots() {
+  const slots = [];
+  for (let i = 0; i < MAX_PHOTOS; i++) {
+    const p = S.photos[i];
+    if (p) {
+      const state = p.status === "reading" ? `<span class="state"><span class="spinner" style="width:10px;height:10px;vertical-align:-1px"></span> Membaca…</span>`
+        : p.status === "err" ? `<span class="state err">Gagal dibaca</span>`
+        : `<span class="state">${p.pieces.map(x => esc(x.plan.label)).join(" + ") || "Tidak ada baju"}</span>`;
+      slots.push(`<div class="slot filled"><img src="${p.preview || p.url}" alt="Foto ${i + 1}"><span class="no no-tag">${i + 1}</span>
+        <button class="x" data-rm="${i}" aria-label="Hapus foto ${i + 1}">×</button>${state}</div>`);
+    } else {
+      slots.push(`<button type="button" class="slot" data-add ${i > S.photos.length ? "disabled" : ""}>${i === S.photos.length
+        ? `<span class="add">${icon("i-upload")}Tambah foto</span>` : ""}</button>`);
+    }
+  }
+  $("f-slots").innerHTML = slots.join("");
+}
+function addPhotos(files) {
+  const room = MAX_PHOTOS - S.photos.length;
+  const list = [...files].filter(f => f.type.startsWith("image/"));
+  if (!list.length) { toast("Berkas harus berupa gambar."); return; }
+  if (list.length > room) toast(`Maksimal ${MAX_PHOTOS} foto — ${list.length - room} foto tidak dipakai.`);
+  list.slice(0, room).forEach(file => {
+    const p = {file, url: URL.createObjectURL(file), name: file.name, status: "reading", pieces: [], preview: null, warnings: [], faces: 0};
+    S.photos.push(p); readPhoto(p);
+  });
+  renderSlots(); renderMergePanel(); renderCanvas();
+}
+async function readPhoto(p) {
+  const fd = new FormData(); fd.append("file", p.file);
+  try {
+    const r = await api("/api/photo", {method: "POST", body: fd});
+    Object.assign(p, {status: "ok", pieces: r.pieces, preview: r.preview, warnings: r.warnings, faces: r.faces_blurred, view: r.photo_view});
+  } catch (e) { Object.assign(p, {status: "err", error: e.html || esc(e)}); }
+  if (!S.photos.includes(p)) return;  // removed while reading
+  if (S.merge.base === null) pickDefaultTarget();
+  renderSlots(); await refreshMerge();
+}
+function removePhoto(i) {
+  const [p] = S.photos.splice(i, 1); URL.revokeObjectURL(p.url);
+  // Photo numbers shift after a removal, so every part choice starts again from the base.
+  Object.assign(S.merge, {base: null, part: null, assign: {}, result: null, error: ""});
+  pickDefaultTarget(); renderSlots(); refreshMerge();
+}
+function targets() {
+  const out = [];
+  S.photos.forEach((p, i) => { if (photoOk(p)) p.pieces.forEach(x => out.push({photo: i + 1, part: x.part, piece: x})); });
+  return out;
+}
+function pickDefaultTarget() {
+  const t = targets().find(x => x.piece.plan.garment) || targets()[0];
+  Object.assign(S.merge, t ? {base: t.photo, part: t.part, assign: {}} : {base: null, part: null, assign: {}});
+}
+function mergeSources() {
+  // Every piece of every photo: the merge picks, per part, the piece that can lend it.
+  const out = {};
+  S.photos.forEach((p, i) => { if (photoOk(p) && p.pieces.length)
+    out[i + 1] = p.pieces.map(x => ({part: x.part, kind: x.kind, features: x.features})); });
+  return out;
+}
+const mergeBody = (notes = "") => ({part: S.merge.part, base: S.merge.base, sources: mergeSources(), assign: S.merge.assign,
+                                    color: S.merge.result?.color || "broken_white", notes});
+async function refreshMerge() {
+  S.merge.error = "";
+  if (S.merge.base === null) { S.merge.result = null; renderMergePanel(); renderCanvas(); return; }
+  try { S.merge.result = await jpost("/api/design/merge", mergeBody()); }
+  catch (e) { S.merge.result = null; S.merge.error = e.html || esc(e); }
+  renderMergePanel(); renderCanvas();
+}
+function groupValue(features, kind, keys) {
+  return keys.map(k => k === "kind" ? vlabel(k, kind) : typeof features[k] === "boolean"
+    ? (features[k] ? FEATURE_LABELS[k] : "") : vlabel(k, features[k])).filter(Boolean).join(", ") || "Tanpa";
+}
+function renderMergePanel() {
+  const el = $("f-merge"), m = S.merge, ts = targets();
+  const reading = S.photos.some(p => p.status === "reading");
+  const errs = S.photos.map((p, i) => p.status === "err" ? callout("err", `Foto ${i + 1}: ${p.error}`) : "").join("");
+  if (!S.photos.length) { el.innerHTML = ""; return; }
+  if (!ts.length) { el.innerHTML = errs + (reading ? "" : callout("warn", "Belum ada baju yang terbaca. Coba foto lain.")); return; }
+  const r = m.result, thumbs = n => S.photos[n - 1]?.preview || S.photos[n - 1]?.url;
+  const targetHtml = `<div><span class="label">Jadikan desain dari</span><div class="targets">${ts.map(t =>
+    `<button class="target" data-base="${t.photo}" data-part="${t.part}" aria-pressed="${t.photo === m.base && t.part === m.part}">
+      <span class="no">${t.photo}</span>${t.piece.plan.garment ? `<svg><use href="#g-${t.piece.plan.garment}"/></svg>` : ""}
+      <span>${esc(PART_LABEL[t.part])}: ${esc(t.piece.plan.label)}</span>
+      ${t.piece.plan.garment ? "" : `<span class="pill fail" style="margin-left:auto">belum didukung</span>`}</button>`).join("")}</div>
+    <p class="hint" style="margin-top:6px">Foto dasar memberi semua bagian yang tidak Anda ambil dari foto lain.</p></div>`;
+  const partsHtml = r ? `<div><span class="label">Ambil setiap bagian dari</span><div class="parts">${r.groups.map(g =>
+    `<div class="part-row" role="radiogroup" aria-label="${esc(g.label)} diambil dari"><span>${esc(g.label)}<small>${esc(groupValue(r.features, r.kind, g.keys))}</small></span>
+      <div class="picks">${S.photos.map((p, i) => `<button class="pick" role="radio" data-g="${g.id}" data-n="${i + 1}" aria-checked="${g.chosen === i + 1}"
+        aria-label="${esc(g.label)} dari foto ${i + 1}" ${g.sources.includes(i + 1) ? "" : "disabled"}><img src="${thumbs(i + 1)}" alt=""><b>${i + 1}</b></button>`).join("")}</div></div>`).join("")}</div>
+    <p class="hint" style="margin-top:6px">Tombol pudar: foto itu tidak punya bagian tersebut (mis. panjang dress tidak bisa dipakai untuk atasan).</p></div>` : "";
+  const planHtml = r ? `<div class="plan-box"><div class="row">${r.plan.garment ? `<svg><use href="#g-${r.plan.garment}"/></svg>` : icon("i-info")}
+      <b>Hasil gabungan: ${esc(r.plan.label)}</b></div>${r.plan.notes.length ? `<ul class="notes">${r.plan.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</div>` : "";
+  el.innerHTML = `${errs}${targetHtml}${partsHtml}${planHtml}
+    ${m.error ? callout("err", m.error) : ""}
+    ${r ? `<div><label class="label" for="f-notes">Catatan tambahan (opsional)</label>
+      <textarea id="f-notes" maxlength="300" style="min-height:60px" placeholder="Contoh: kerahnya dari foto 2 tapi dibuat kontras">${esc(m.notes)}</textarea>
+      <p class="hint" style="margin-top:4px">Kalau diisi, Muse Spark menerapkannya setelah bagian digabung.</p></div>
+      <button class="go" id="f-go" ${r.plan.garment ? "" : "disabled"}>${icon("i-check")}<span>Gabungkan jadi desain →</span></button>` : ""}`;
+}
+$("f-slots").addEventListener("click", e => {
+  const rm = e.target.closest("button[data-rm]"); if (rm) { removePhoto(+rm.dataset.rm); return; }
+  if (e.target.closest("button[data-add]")) $("f-file").click();
+});
+$("f-file").onchange = e => { addPhotos([...e.target.files]); e.target.value = ""; };
+["dragenter", "dragover"].forEach(ev => $("f-slots").addEventListener(ev, e => { e.preventDefault(); $("f-slots").querySelector("[data-add]:not([disabled])")?.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => $("f-slots").addEventListener(ev, e => { e.preventDefault(); $("f-slots").querySelectorAll(".over").forEach(x => x.classList.remove("over")); }));
+$("f-slots").addEventListener("drop", e => { if (e.dataTransfer.files.length) addPhotos([...e.dataTransfer.files]); });
+$("f-merge").addEventListener("input", e => { if (e.target.id === "f-notes") S.merge.notes = e.target.value; });
+$("f-merge").addEventListener("click", async e => {
+  const t = e.target.closest("button[data-base]");
+  if (t) { Object.assign(S.merge, {base: +t.dataset.base, part: t.dataset.part, assign: {}}); refreshMerge(); return; }
+  const pk = e.target.closest("button[data-g]");
+  if (pk && !pk.disabled) { S.merge.assign = {...S.merge.assign, [pk.dataset.g]: +pk.dataset.n}; refreshMerge(); return; }
+  if (e.target.closest("#f-go")) finishMerge();
+});
+async function finishMerge() {
+  const btn = $("f-go"), notes = S.merge.notes.trim();
+  let r = S.merge.result;
+  if (notes) {
+    busy(btn, true, "Muse menerapkan catatan…");
+    try { r = await jpost("/api/design/merge", mergeBody(notes)); }
+    catch (e) { S.merge.error = e.html || esc(e); busy(btn, false); renderMergePanel(); return; }
+  }
+  const used = [...new Set(Object.values(r.provenance))];
+  addVersion({name: `${r.plan.label} dari ${used.length > 1 ? used.length + " foto" : "foto " + used[0]}`, part: r.part, kind: r.kind,
+              features: r.features, color: r.color || "broken_white", fabric: null, plan: r.plan, source: "foto",
+              provenance: r.provenance, groups: r.groups, changes: r.changes || [], reason: r.reason || "", unsupported: r.unsupported || []}, true);
+  go("sempurnakan");
+}
+function provHtml(d) {
+  if (!d.provenance || !d.groups || new Set(Object.values(d.provenance)).size < 2) return "";
+  return `<div class="prov">${d.groups.map(g => `<span>${esc(g.label)} ← foto ${d.provenance[g.id]}</span>`).join("")}</div>`;
+}
+function compareHtml() {
+  const m = S.merge, r = m.result;
+  const cards = S.photos.map((p, i) => {
+    const n = i + 1, piece = !photoOk(p) ? null : n === m.base ? p.pieces.find(x => x.part === m.part) : (m.part ? sourceFor(p, m.part) : p.pieces[0]);
+    const lender = g => n === m.base ? piece : p.pieces.find(x => x.part === g.lenders[String(n)]);
+    let body = "";
+    if (p.status === "reading") body = `<p class="hint"><span class="spinner" style="width:12px;height:12px"></span> Muse Wonder membaca foto…</p>`;
+    else if (p.status === "err") body = `<p class="hint" style="color:var(--brick)">Foto gagal dibaca.</p>`;
+    else if (!piece) body = `<p class="hint">Tidak ada bagian yang cocok untuk ${esc(PART_LABEL[m.part] || "desain ini")}.</p>`;
+    else if (r) body = `<ul class="feat">${r.groups.map(g => {
+        const ok = g.sources.includes(n), taken = g.chosen === n;
+        return `<li class="${taken ? "taken" : ""} ${ok ? "" : "na"}"><span>${esc(g.label)}</span><b>${ok ? esc(groupValue(lender(g).features, lender(g).kind, g.keys)) : "—"}</b></li>`; }).join("")}</ul>`;
+    else body = `<p class="hint">${p.pieces.map(x => esc(PART_LABEL[x.part] + ": " + x.plan.label)).join(" · ")}</p>`;
+    const tag = n === m.base ? `<span class="pill" style="background:var(--tape);color:var(--tape-ink)">dasar</span>`
+      : piece ? `<span class="pill">${esc(piece.plan.label)}</span>` : "";
+    return `<div class="pcard ${n === m.base ? "base" : ""}"><img src="${p.preview || p.url}" alt="Foto ${n}">
+      <div class="pcard-head"><span class="no ${n === m.base ? "on" : ""}">${n}</span><b>Foto ${n}</b>${tag}</div>
+      ${p.status === "ok" && p.faces ? `<p class="hint">${p.faces} wajah diburamkan</p>` : ""}${body}</div>`;
+  }).join("");
+  const result = r ? `<div class="hero"><div class="hero-head"><h2>Hasil gabungan</h2>
+      <span class="pill ${r.plan.garment ? "pass" : "fail"}">${r.plan.garment ? "Pola: " + esc(r.plan.label) : "Belum didukung"}</span></div>
+      ${pvHtml(r.plan, "Pratinjau 3D hasil gabungan", {controls: true})}
+      <div class="prov">${r.groups.map(g => `<span>${esc(g.label)} ← foto ${g.chosen}</span>`).join("")}</div></div>` : "";
+  return `<div class="compare">${cards}</div>${result}<p class="hint">Bagian yang diambil ditandai kuning di setiap foto. Atur di panel kanan.</p>`;
+}
+renderSlots();
+
+/* ---------- step 2: sempurnakan ---------- */
+function renderRefine() {
+  const d = cur(); if (!d || !S.catalog) return;
+  const plan = d.plan, ok = !!plan.garment, block = BLOCKS.includes(plan.garment);
+  $("r-plan").innerHTML = `<div class="plan-box"><div class="row">${ok ? `<svg><use href="#g-${plan.garment}"/></svg>` : icon("i-info")}
+      <div><b>Yang akan digambar: ${esc(plan.label)}</b><div class="hint">${ok ? "Sketsa menunjukkan pola yang benar-benar dibuat." : "Belum ada di pustaka pola — pilih jenis lain."}</div></div></div>
+    ${plan.notes.length ? `<ul class="notes">${plan.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
+    ${block ? `<p class="hint">${esc(plan.label)} memakai blok standar: lengan, panjang dan siluet mengikuti blok. Pilih kerah atau kancing depan untuk beralih ke kemeja.</p>` : ""}</div>`;
+  const cat = S.catalog[d.part];
+  const kinds = {top: ["shirt", "blouse", "tunic", "tshirt"], bottom: ["skirt"], dress: ["dress"]}[d.part];
+  const rows = kinds.length > 1 ? [["kind", kinds]] : [];
+  const keys = d.part === "top" && block ? QUICK_KEYS.block : QUICK_KEYS[d.part];
+  // Sleeveless is never drafted (shirt and dress both swap it for short sleeves).
+  keys.forEach(k => rows.push([k, cat[k].filter(v => v !== "other" && !(k === "sleeve_length" && v === "sleeveless"))]));
+  if (d.part === "top" && !block) rows.push(["pockets", [0, 1, 2]], ["cuff", [false, true]], ["elastic_cuff", [false, true]]);
+  if (d.part === "bottom") rows.push(["waistband", [false, true]]);
+  if (d.part === "dress") rows.push(["waist_seam", [false, true]]);
+  $("r-quick").innerHTML = rows.map(([k, values]) => {
+    const now = k === "kind" ? d.kind : d.features[k];
+    return `<div class="quick-row" role="group" aria-label="${esc(FEATURE_LABELS[k])}"><span>${esc(FEATURE_LABELS[k])}</span><div class="chips">${values.map(v =>
+      `<button class="chip" data-k="${k}" data-v='${esc(JSON.stringify(v))}' aria-pressed="${v === now}">${esc(vlabel(k, v))}</button>`).join("")}</div></div>`;
+  }).join("");
+  $("r-palette").innerHTML = Object.entries(S.catalog.colors).map(([k, c]) =>
+    `<button data-color="${k}" style="background:${c.hex}" title="${esc(c.name)}" aria-label="${esc(c.name)}" aria-pressed="${k === d.color}"></button>`).join("");
+  $("r-next").disabled = !ok;
+}
+async function quickChange(key, value) {
+  const d = cur(), next = {...d, features: {...d.features}, reason: "", source: "cepat"};
+  if (key === "kind") next.kind = value; else if (key === "color") next.color = value; else next.features[key] = value;
+  document.querySelectorAll("#r-quick .chip, #r-palette button").forEach(b => b.disabled = true);
+  try {
+    const r = await jpost("/api/style-plan", {part: d.part, kind: next.kind, features: next.features, color: next.color});
+    Object.assign(next, {kind: r.kind, features: r.features, plan: r.plan});
+    next.changes = diffClient(d, next);
+    if (next.changes.length) addVersion(next);
+  } catch (e) { toast("Gagal menerapkan perubahan."); }
+  renderRefine(); renderStepper(); renderCanvas();
+}
+$("r-quick").onclick = e => { const b = e.target.closest("button[data-k]"); if (b && b.getAttribute("aria-pressed") !== "true") quickChange(b.dataset.k, JSON.parse(b.dataset.v)); };
+$("r-palette").onclick = e => { const b = e.target.closest("button[data-color]"); if (b && b.getAttribute("aria-pressed") !== "true") quickChange("color", b.dataset.color); };
+$("r-go").onclick = async () => {
+  const instruction = $("r-text").value.trim(), d = cur();
+  if (instruction.length < 3) { toast("Tulis perubahan yang diinginkan."); $("r-text").focus(); return; }
+  const btn = $("r-go"); busy(btn, true, "Muse menerapkan…"); $("r-err").innerHTML = "";
+  try {
+    const r = await jpost("/api/design/refine", {design: {...styleOf(d), color: d.color}, instruction});
+    if (!r.changes.length) $("r-err").innerHTML = gapHtml(r.unsupported) || callout("warn", r.plan.notes.map(esc).join("<br>") || "Tidak ada yang berubah.");
+    else {
+      addVersion({...d, kind: r.kind, features: r.features, color: r.color, plan: r.plan, changes: r.changes, reason: r.reason, source: "muse",
+                  unsupported: mergeGaps(d.unsupported, r.unsupported)});
+      if (r.unsupported?.length) $("r-err").innerHTML = gapHtml(r.unsupported, true);
+      $("r-text").value = "";
+      if (r.changes.length > 2) $("r-err").innerHTML = callout("warn", `${r.changes.length} hal berubah sekaligus — cek tiap perubahan di bawah sketsa.`);
+    }
+    renderRefine(); renderStepper(); renderCanvas();
+  } catch (e) { $("r-err").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); }
+};
+$("r-next").onclick = async () => {
+  const d = cur(); if (!d?.plan.garment) return;
+  const g = d.plan.garment;
+  if (d.fabric) { S.fabric = d.fabric; S.fabricFor = g; }
+  S.garment = g; S.style = styleOf(d); S.styleLabel = `${d.name} (v${S.vi + 1})`;
+  await loadMeta();
+  $("u-for").textContent = `${S.styleLabel} — ${GNAME[g]}. Angka mm selalu dari ukuran, tidak pernah dari foto atau AI.`;
+  $("p-for").textContent = `${S.styleLabel}: cut list, kebutuhan kain, biaya dan denah potong per ukuran.`;
+  go("ukuran");
+};
+
+/* ---------- step 3: kain & ukuran ---------- */
+function buildSizes(el, sizes, active, onPick) {
+  el.innerHTML = sizes.map(s => `<button type="button" data-s="${s}" class="${s === active ? "active" : ""}">${s}</button>`).join("");
+  el.onclick = e => { const b = e.target.closest("button"); if (!b) return;
+    el.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b)); onPick(b.dataset.s); };
+}
+function buildMeasureFields(el, fields, values) {
+  el.innerHTML = fields.map(k => `<div class="measure"><label for="${el.id}-${k}" title="${k}">${esc(LABELS[k] || k)}</label>
+    <div class="unit"><input type="number" step="0.1" min="0" id="${el.id}-${k}" data-k="${k}" value="${values?.[k] ?? ""}" data-base="${values?.[k] ?? ""}"></div></div>`).join("");
+  el.oninput = e => { const i = e.target; if (i.dataset.k) i.closest(".measure").classList.toggle("changed", i.value !== i.dataset.base); };
+}
+function fillMeasures(el, values) {
+  el.querySelectorAll("input").forEach(i => { i.value = values?.[i.dataset.k] ?? ""; i.dataset.base = i.value; i.closest(".measure").classList.remove("changed"); });
+}
+const readMeasures = el => Object.fromEntries([...el.querySelectorAll("input")].filter(i => i.value !== "").map(i => [i.dataset.k, parseFloat(i.value)]));
+function readRun() {
+  const run = {};
+  document.querySelectorAll("#p-run input").forEach(i => { const q = parseInt(i.value, 10); if (q > 0) run[i.dataset.s] = q; });
+  return run;
+}
+async function loadMeta() {
+  let meta;
+  try { meta = await api("/api/fields?garment=" + S.garment); } catch { toast("Gagal memuat data garmen."); return; }
+  S.meta = meta;
+  if (S.fabricFor !== S.garment || !meta.fabrics.includes(S.fabric)) { S.fabric = meta.default_fabric; S.fabricFor = S.garment; }
+  $("u-fabric").innerHTML = meta.fabrics.map(f => { const [n, sub] = FABRICS[f] || [f, ""];
+    return `<div class="choice"><input type="radio" name="fab" id="fab-${f}" value="${f}" ${f === S.fabric ? "checked" : ""}>
+      <label for="fab-${f}"><i></i><b>${esc(n)}${f === meta.default_fabric ? "<em>disarankan</em>" : ""}</b><span>${esc(sub)}</span></label></div>`; }).join("");
+  $("u-fabric").onchange = e => { S.fabric = e.target.value; renderStepper(); };
+  if (!meta.sizes.includes(S.size)) S.size = meta.sizes[0];
+  buildSizes($("u-size"), meta.sizes, S.size, s => S.size = s);
+  buildSizes($("u-base"), meta.sizes, S.size, s => fillMeasures($("u-fields"), meta.size_values[s]));
+  buildMeasureFields($("u-fields"), meta.fields, meta.size_values[S.size]);
+  $("u-examples").innerHTML = `<button type="button">${esc(EXAMPLES[S.garment] || EXAMPLES.default)}</button>`;
+  const prev = readRun();
+  $("p-run").innerHTML = meta.sizes.map((s, i) => `<div class="measure"><label for="p-q-${s}">${s}</label>
+    <input type="number" min="0" step="1" id="p-q-${s}" data-s="${s}" value="${prev[s] ?? [20, 50, 30, 0][i] ?? 0}"></div>`).join("");
+}
+$("u-mode").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return; S.umode = b.dataset.mode;
+  $("u-mode").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("[data-upane]").forEach(p => p.hidden = p.dataset.upane !== S.umode);
+};
+$("u-examples").onclick = e => { const b = e.target.closest("button"); if (b) { $("u-text").value = b.textContent; $("u-text").focus(); } };
+$("u-fab-go").onclick = async () => {
+  const btn = $("u-fab-go"); busy(btn, true, "Muse memilih kain…"); $("u-fab-out").innerHTML = "";
+  try {
+    const r = await jpost("/api/fabric-suggest", {garment: S.garment, ...(S.style ? {style: S.style} : {}), brief: ($("d-brief")?.value || "").trim()});
+    S.fabric = r.fabric; const pick = $("fab-" + r.fabric); if (pick) pick.checked = true; renderStepper();
+    const name = c => esc((FABRICS[c] || [c])[0]);
+    $("u-fab-out").innerHTML = `<div class="muse-note">${museTag(r.source)}<p><b>${name(r.fabric)}</b> — ${esc(r.reason)}</p>
+      <small>Lulus verifikasi pola untuk desain ini: ${r.candidates.map(name).join(", ")}. Pilihan sudah dipasang; ganti di atas bila perlu.</small></div>`;
+  } catch (e) { $("u-fab-out").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); }
+};
+$("u-mphoto-go").onclick = () => $("u-mphoto").click();
+$("u-mphoto").onchange = async () => {
+  const file = $("u-mphoto").files[0]; if (!file) return;
+  const btn = $("u-mphoto-go"); busy(btn, true, "Muse Wonder membaca catatan…"); $("u-mphoto-out").innerHTML = "";
+  const form = new FormData(); form.append("file", file); form.append("garment", S.garment);
+  try {
+    const r = await api("/api/measure-photo", {method: "POST", body: form});
+    const read = Object.keys(r.measurements_cm);
+    $("u-fields").querySelectorAll("input").forEach(i => { if (i.dataset.k in r.measurements_cm) {
+      i.value = r.measurements_cm[i.dataset.k]; i.closest(".measure").classList.toggle("changed", i.value !== i.dataset.base); } });
+    $("u-mphoto-out").innerHTML = `<div class="muse-note"><span class="pill muse">${icon("i-spark")} Dibaca Muse Wonder · dicek aturan ukuran</span>
+      <p>${read.length} kolom terisi dari foto${read.length ? ": " + read.map(k => esc(LABELS[k] || k)).join(", ") : ""}. Cocokkan dengan catatan sebelum membuat pola.</p>
+      ${r.warnings.length ? `<ul>${r.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      ${r.missing.length ? `<small>Belum terbaca (pakai nilai yang ada atau isi sendiri): ${r.missing.map(k => esc(LABELS[k] || k)).join(", ")}</small>` : ""}</div>`;
+  } catch (e) { $("u-mphoto-out").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); $("u-mphoto").value = ""; }
+};
+$("u-go").onclick = () => {
+  const base = {garment: S.garment, fabric: S.fabric, ...(S.style ? {style: S.style} : {})};
+  if (S.umode === "text") {
+    const text = $("u-text").value.trim();
+    if (!text) { toast("Tulis catatan ukuran dulu."); return; }
+    postPack({...base, mode: "text", text});
+  } else if (S.umode === "measures") postPack({...base, mode: "measures", unit: "cm", measures: readMeasures($("u-fields"))});
+  else postPack({...base, mode: "size", size: S.size});
+};
+
+/* ---------- step 4: bukti ---------- */
+async function postPack(body) {
+  const btn = $("u-go"); busy(btn, true, "Draft → verifikasi → bukti…"); $("u-err").innerHTML = "";
+  try {
+    const pack = await jpost("/api/pack", body);
+    let svg = ""; try { svg = await fetch(pack.files.svg).then(r => r.ok ? r.text() : ""); } catch {}
+    Object.assign(S, {pack, body, svg, signoff: null, story: null, toile: null});
+    renderPack(); renderSign(); go("bukti"); loadStory();
+  } catch (e) { $("u-err").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); }
+}
+function gauge(c) {
+  if (c.actual === null || c.expected === null || !c.tolerance) return "";
+  const dev = Math.abs(c.actual - c.expected), pct = Math.min(100, dev / c.tolerance * 100);
+  return `<div class="gauge"><span>${num(c.actual)} / ${num(c.expected)}</span><span class="bar" title="Selisih ${num(dev, 2)} dari ±${num(c.tolerance)}"><i style="width:${Math.max(pct, 3)}%"></i></span><span>±${num(c.tolerance)}</span></div>`;
+}
+function renderPack() {
+  const p = S.pack, total = p.checks.length, good = passed(p), fails = total - good;
+  const groups = {};
+  p.checks.forEach(c => (groups[c.id[0]] = groups[c.id[0]] || []).push(c));
+  const order = Object.keys(groups).sort((a, b) => groups[b].filter(c => !c.passed).length - groups[a].filter(c => !c.passed).length);
+  const checks = order.map(k => `<div class="group"><h4>${esc(GROUPS[k] || k)}</h4><div class="checks">${groups[k].map(c =>
+    `<div class="check ${c.passed ? "" : "fail"}"><div class="row1"><span class="id">${esc(c.id)}</span><b>${esc(c.name)}</b>
+      <span class="state ${c.passed ? "pass" : "fail"}">${c.passed ? "LULUS" : "GAGAL"}</span></div><p>${esc(c.message)}</p>${gauge(c)}</div>`).join("")}</div></div>`).join("");
+  const rounds = p.rounds.length ? `<ol class="timeline">${p.rounds.map(r => {
+      const ok = r.decision === "accepted", props = Object.entries(r.proposed || {}).map(([k, v]) => `<code>${esc(k)} → ${num(v, 2)}</code>`).join("");
+      return `<li><span class="tdot ${ok ? "ok" : ""}">${esc(r.round)}</span><b>Ronde ${esc(r.round)} · ${ok ? "usulan diterima" : "usulan ditolak"}</b>
+        <p>Gagal: ${esc((r.failed || []).join(", ") || "–")}${r.locality_passed == null ? "" : ` · lokalitas ${r.locality_passed ? "aman" : "bocor"}`}</p>
+        ${props ? `<div class="kv">${props}</div>` : ""}${r.reason ? `<p>Alasan AI: ${esc(r.reason)}</p>` : ""}<p><b>Hasil:</b> ${esc(r.outcome || "-")}</p></li>`; }).join("")}</ol>`
+    : callout("info", "Lulus pada draft pertama — tidak ada putaran perbaikan.");
+  const ins = p.explanation.instructions;
+  const expl = `<p style="margin:0">${esc(p.explanation.summary)}</p>${ins.length ? `<ol class="instr">${ins.map(i =>
+    `<li><span class="where">${esc(i.panel)} · ${esc(i.edge)}${i.amount_mm != null ? ` · ${num(i.amount_mm)} mm` : ""}</span><span>${esc(i.text)}</span></li>`).join("")}</ol>` : ""}`;
+  const notes = p.style?.notes?.length ? callout("info", `<b>Catatan gaya</b><ul>${p.style.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>`) : "";
+  $("out").innerHTML = `<div class="sheet">
+    <div class="verdict"><div class="ring" data-label="${good}/${total}" style="--p:${good / total * 100};--ring:${p.passed ? "var(--leaf)" : "var(--brick)"}"></div>
+      <div><h3>${p.passed ? "Pola lulus verifikasi" : "Pola belum lulus"}</h3><p>${esc(p.summary)}</p></div></div>
+    <div id="b-story">${storySummaryHtml()}</div>
+    ${notes}
+    <div class="subtabs" id="b-tabs"><button class="active" data-sub="checks">Pemeriksaan <span class="count ${fails ? "fail" : ""}">${good}/${total}</span></button>
+      <button data-sub="rounds">Perbaikan <span class="count">${p.rounds.length}</span></button>
+      <button data-sub="explain">Penjahit ${ins.length ? `<span class="count fail">${ins.length}</span>` : ""}</button>
+      <button data-sub="sew">Jahit</button></div>
+    <div class="subpane active" data-pane="checks">${checks}</div>
+    <div class="subpane" data-pane="rounds">${rounds}</div>
+    <div class="subpane" data-pane="explain">${expl}</div>
+    <div class="subpane" data-pane="sew" id="b-sew">${sewHtml()}</div>
+    ${p.passed ? `<button class="go" id="to-cek">Lanjut ke cek pembuat pola →</button>` : callout("warn", "PDF dan DXF ditolak sampai semua pemeriksaan lulus. Ubah ukuran atau desain, lalu buat ulang.")}
+  </div>`;
+  $("b-tabs").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+    $("b-tabs").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+    $("out").querySelectorAll(".subpane").forEach(x => x.classList.toggle("active", x.dataset.pane === b.dataset.sub)); };
+  $("to-cek")?.addEventListener("click", () => go("cek"));
+}
+
+function storySummaryHtml() {
+  const st = S.story;
+  if (!st) return `<div class="muse-note"><span class="pill muse">${icon("i-spark")} Muse menulis penjelasan…</span></div>`;
+  return `<div class="muse-note">${museTag(st.source)}<p>${esc(st.summary)}</p></div>`;
+}
+function sewHtml() {
+  const st = S.story;
+  if (!st) return `<p class="hint">Muse sedang menulis urutan jahit…</p>`;
+  if (!st.sewing_steps.length) return callout("info", "Urutan jahit belum tersedia — Muse tidak bisa dihubungi atau menulis angka yang tidak cocok.");
+  return `<div class="muse-note">${museTag(st.source)}<ol>${st.sewing_steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+    <small>Urutan ini saran kepala jahit; ukuran dan kampuh tetap mengikuti pola.</small></div>`;
+}
+async function loadStory() {
+  const job = S.pack?.job; if (!job) return;
+  let st; try { st = await api(`/api/story/${job}`); } catch { st = null; }
+  if (!st || S.pack?.job !== job) return;
+  S.story = st;
+  if ($("b-story")) $("b-story").innerHTML = storySummaryHtml();
+  if ($("b-sew")) $("b-sew").innerHTML = sewHtml();
+  if ($("c-checks")) $("c-checks").innerHTML = toileChecksHtml();
+}
+function toileChecksHtml() {
+  const st = S.story;
+  if (!st) return `<p class="hint">Muse sedang menyusun daftar cek toile…</p>`;
+  return `<div class="muse-note">${museTag(st.source)}<ul>${st.toile_checks.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+}
+function toileResultHtml() {
+  const t = S.toile; if (!t) return "";
+  const issues = t.issues.length ? `<ul>${t.issues.map(i => `<li><b>${esc(i.name)}</b>${i.location ? " · " + esc(i.location) : ""} · bobot ${esc(i.severity)}${i.evidence ? `<br><small>${esc(i.evidence)}</small>` : ""}</li>`).join("")}</ul>` : "<p>Tidak ada masalah yang dikenali.</p>";
+  const changes = t.changes.length ? `<table class="data"><thead><tr><th>Parameter</th><th class="r">v1</th><th class="r">v2</th></tr></thead><tbody>${t.changes.map(c =>
+    `<tr><td><code>${esc(c.param)}</code></td><td class="r">${num(c.v1, 1)}</td><td class="r"><b>${num(c.v2, 1)}</b></td></tr>`).join("")}</tbody></table>` : "";
+  const notes = [...t.clamped, ...t.advice];
+  const verdict = !t.changes.length ? callout("info", "Tidak ada perubahan parameter otomatis — lihat saran di atas dan perbaiki manual.")
+    : !t.locality ? callout("err", "Perubahan menyentuh tepi di luar deklarasi — ditolak, pola v1 tetap dipakai.")
+    : t.pack && t.pack.passed ? `${callout("info", `Pola v2 ${esc(t.pack.summary)}`)}<button class="go" id="t-use">${icon("i-check")}<span>Pakai pola v2 (cek ulang dari awal)</span></button>`
+    : callout("warn", "Pola v2 belum lulus verifikasi — v1 tetap dipakai.");
+  const who = [t.read_by.photos ? "foto: Muse Wonder" : "", t.read_by.notes === "muse" ? "catatan: Muse Spark"
+               : t.read_by.notes ? "catatan: kata kunci (Muse tidak tersedia)" : ""].filter(Boolean).join(" · ");
+  return `<div class="muse-note"><span class="pill muse">${icon("i-spark")} Dibaca ${esc(who)} · koreksi dari tabel aturan</span>${issues}</div>
+    ${changes}${notes.length ? `<ul class="notes">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}${verdict}`;
+}
+function bindToile() {
+  $("t-pick")?.addEventListener("click", () => $("t-files").click());
+  $("t-files")?.addEventListener("change", () => { const n = $("t-files").files.length;
+    $("t-names").textContent = n ? `${n} foto dipilih${n > 3 ? " (maks. 3 dipakai)" : ""}` : "Belum ada foto"; });
+  $("t-go")?.addEventListener("click", async () => {
+    const files = [...$("t-files").files].slice(0, 3), notes = $("t-notes").value.trim();
+    if (!files.length && !notes) { toast("Pilih foto toile atau tulis masalahnya."); return; }
+    const btn = $("t-go"); busy(btn, true, files.length ? "Muse Wonder melihat toile…" : "Menghitung koreksi…");
+    const form = new FormData(); files.forEach(f => form.append("files", f)); form.append("notes", notes);
+    try { S.toile = await api(`/api/toile/${S.pack.job}`, {method: "POST", body: form}); $("t-out").innerHTML = toileResultHtml(); bindToileUse(); }
+    catch (e) { $("t-out").innerHTML = callout("err", e.html || esc(e)); }
+    finally { busy(btn, false); }
+  });
+  bindToileUse();
+}
+function bindToileUse() {
+  $("t-use")?.addEventListener("click", async () => {
+    const pack = S.toile.pack;
+    let svg = ""; try { svg = await fetch(pack.files.svg).then(r => r.ok ? r.text() : ""); } catch {}
+    Object.assign(S, {pack, svg, signoff: null, story: null, toile: null});
+    renderPack(); renderSign(); renderStepper(); renderCanvas(); go("bukti"); loadStory(); toast("Pola v2 dipakai. Cek ulang sebelum memotong.");
+  });
+}
+
+/* ---------- step 5: cek & unduh ---------- */
+function dl(href, label, sub, primary) {
+  return href ? `<a class="dl ${primary ? "primary" : ""}" href="${esc(href)}">${icon("i-dl")}<span>${label}<small>${sub}</small></span></a>`
+              : `<a class="dl locked" aria-disabled="true">${icon("i-lock")}<span>${label}<small>${sub}</small></span></a>`;
+}
+function renderSign() {
+  const p = S.pack; if (!p) return;
+  const f = p.files;
+  const gate = !p.passed ? callout("warn", "Pola belum lulus verifikasi — tidak bisa dicek atau diekspor.")
+    : S.signoff ? `<div class="signed">${icon("i-pen")}<div><b>Dicek oleh ${esc(S.signoff.name)}</b>${esc(S.signoff.at.replace("T", " ").slice(0, 16))} UTC${S.signoff.note ? " · " + esc(S.signoff.note) : ""}</div></div>`
+    : `<div style="display:grid;gap:10px"><p class="hint">Cetak PDF 1:1, ukur kotak uji 10 cm, periksa panel, lalu tandai sudah dicek. Nama dan tanggal dicetak di laporan bukti, dan file DXF untuk mesin potong terbuka.</p>
+        <div class="measure"><label for="s-name">Nama pembuat pola</label><input type="text" id="s-name" maxlength="60" placeholder="mis. Bu Sari"></div>
+        <div class="measure"><label for="s-note">Catatan (opsional)</label><textarea id="s-note" maxlength="300" style="min-height:60px" placeholder="mis. toile ukuran M sudah dicoba, pas"></textarea></div>
+        <div id="s-err"></div>
+        <button class="go" id="s-go">${icon("i-pen")}<span>Tandai sudah dicek</span></button></div>`;
+  const toile = !p.passed ? "" : `<div><span class="label">Daftar cek toile</span><div id="c-checks">${toileChecksHtml()}</div></div>
+    <div style="display:grid;gap:10px"><span class="label" style="margin:0">Koreksi dari toile</span>
+      <p class="hint">Jahit toile dari PDF, foto saat dipakai (depan/samping/belakang), lalu kirim. Muse Wonder menyebut masalahnya; besar koreksi dari tabel aturan; pola v2 digambar ulang dan diverifikasi.</p>
+      <div class="toile-files"><button type="button" class="go quiet small" id="t-pick" style="width:auto;padding:0 14px">${icon("i-upload")}<span>Pilih foto toile</span></button>
+        <span id="t-names">Belum ada foto</span><input type="file" id="t-files" accept="image/*" multiple hidden></div>
+      <textarea id="t-notes" maxlength="400" style="min-height:56px" placeholder="Opsional: tulis masalahnya, mis. &quot;ketiak menarik&quot;; &quot;leher sedikit menganga&quot;"></textarea>
+      <button class="go quiet" id="t-go">${icon("i-spark")}<span>Periksa toile</span></button>
+      <div id="t-out">${toileResultHtml()}</div></div>`;
+  $("sign").innerHTML = `<div class="sheet">${gate}${toile}
+    <div><span class="label">Unduhan</span><div class="downloads">
+      ${dl(f.pdf, "PDF 1:1", S.signoff ? "A4 tile, bertanda cek" : "A4 tile + laporan", true)}
+      ${dl(f.dxf, "DXF", f.dxf ? "mesin potong / CAD, mm" : "terbuka setelah dicek")}
+      ${dl(f.md, "Laporan", "report.md")}${dl(f.svg, "SVG", "pratinjau")}${dl(f.json, "JSON", "data pola")}
+    </div></div>
+    <button class="go quiet" id="to-prod">${icon("i-factory")}<span>Lanjut ke paket produksi →</span></button></div>`;
+  $("to-prod").onclick = () => go("produksi");
+  bindToile();
+  $("s-go")?.addEventListener("click", async () => {
+    const name = $("s-name").value.trim();
+    if (name.length < 2) { toast("Isi nama pembuat pola."); $("s-name").focus(); return; }
+    const btn = $("s-go"); busy(btn, true, "Menyimpan…");
+    try { const r = await jpost(`/api/check/${p.job}`, {name, note: $("s-note").value.trim()});
+          S.signoff = r.signoff; p.files = r.files; renderSign(); renderStepper(); toast("Tercatat. DXF terbuka."); }
+    catch (e) { $("s-err").innerHTML = callout("err", e.html || esc(e)); busy(btn, false); }
+  });
+}
+
+/* ---------- step 6: produksi ---------- */
+$("p-go").onclick = async () => {
+  const run = readRun();
+  if (!Object.keys(run).length) { toast("Isi jatah minimal satu ukuran."); return; }
+  const btn = $("p-go"); busy(btn, true, "Menyusun denah…");
+  try {
+    const d = await jpost("/api/production", {garment: S.garment, fabric: S.fabric, run, ...(S.style ? {style: S.style} : {}),
+      width: parseFloat($("p-width").value), price: parseFloat($("p-price").value) || 0, layers: parseInt($("p-layers").value, 10) || 1});
+    S.production = {...d, pieces: d.sizes.reduce((a, s) => a + s.qty, 0), width: parseFloat($("p-width").value)};
+    S.viewPinned = false; renderProduction(d); renderStepper(); renderCanvas(); loadProductionStory(d.job);
+  } catch (e) { $("p-out").innerHTML = callout("err", e.html || esc(e)); }
+  finally { busy(btn, false); }
+};
+function renderProduction(d) {
+  const pieces = S.production.pieces, unverified = d.sizes.filter(s => !s.verified).map(s => s.size);
+  const sizes = d.sizes.map(s => s.size), panels = [], m = {};
+  Object.entries(d.cut_list).forEach(([k, v]) => { const i = k.indexOf(" "), s = k.slice(0, i), p = k.slice(i + 1);
+    if (!panels.includes(p)) panels.push(p); (m[p] = m[p] || {})[s] = v; });
+  const W = S.production.width, prints = d.sizes.map(s => {
+    const f = d.files.markers[s.size], [pw, ph] = s.plot_page_mm;
+    return `<div class="print-row"><b>${esc(s.size)}</b>${f.plot
+      ? `<a class="dl primary" href="${esc(f.plot)}">${icon("i-dl")}<span>Plotter 1:1<small>kertas ${num(pw / 1000, 2)} × ${num(ph / 1000, 2)} m</small></span></a>
+         <a class="dl" href="${esc(f.a4)}">${icon("i-dl")}<span>A4 1:1<small>${num(s.a4_sheets, 0)} lembar ditempel</small></span></a>`
+      : `<a class="dl locked">${icon("i-dl")}<span>Plotter 1:1<small>belum lulus cek</small></span></a><a class="dl locked">${icon("i-dl")}<span>A4 1:1<small>belum lulus cek</small></span></a>`}</div>`;
+  }).join("");
+  $("p-out").innerHTML = `<div class="sheet">
+    <div class="kpis"><div class="kpi"><span>Total potong</span><b>${num(pieces, 0)}</b><small>${sizes.length} ukuran</small></div>
+      <div class="kpi"><span>Kain</span><b>${num(d.total_metres, 2)} m</b><small>lebar ${num(W, 0)} mm</small></div>
+      <div class="kpi"><span>Biaya kain</span><b>${rupiah(d.total_cost)}</b><small>${pieces ? rupiah(d.total_cost / pieces) + "/potong" : ""}</small></div>
+      <div class="kpi"><span>Utilisasi</span><b>${num(d.overall_utilisation * 100, 1)}%</b><small>luas panel ÷ kain</small></div></div>
+    ${unverified.length ? callout("warn", `Ukuran <b>${esc(unverified.join(", "))}</b> belum lulus verifikasi — jangan dipotong dulu.`) : ""}
+    <table class="data"><thead><tr><th>Ukuran</th><th class="r">Jatah</th><th>Cek</th><th class="r">Meter</th><th>Utilisasi</th></tr></thead><tbody>${d.sizes.map(s =>
+      `<tr><td><b>${esc(s.size)}</b></td><td class="r">${num(s.qty, 0)}</td><td><span class="pill ${s.verified ? "pass" : "fail"}">${s.verified ? "Lulus" : "Gagal"}</span></td>
+       <td class="r">${num(s.metres, 2)}</td><td><div class="util"><span class="bar"><i style="width:${(s.utilisation * 100).toFixed(1)}%"></i></span>${num(s.utilisation * 100, 0)}%</div></td></tr>`).join("")}</tbody></table>
+    <div><span class="label">Cut list (lembar kain)</span><table class="data"><thead><tr><th>Panel</th>${sizes.map(s => `<th class="r">${esc(s)}</th>`).join("")}<th class="r">Total</th></tr></thead><tbody>${
+      panels.map(p => `<tr><td>${esc(p)}</td>${sizes.map(s => `<td class="r">${num(m[p][s] ?? 0, 0)}</td>`).join("")}<td class="r"><b>${num(sizes.reduce((a, s) => a + (m[p][s] || 0), 0), 0)}</b></td></tr>`).join("")}</tbody></table></div>
+    <div><span class="label">Catatan untuk bagian potong &amp; pemilik</span><div id="p-story"><div class="muse-note"><span class="pill muse">${icon("i-spark")} Muse menulis catatan…</span></div></div></div>
+    <div><span class="label">Cetak marker (skala 1:1)</span><div class="prints">${prints}</div></div>
+    <p class="hint">Plotter: bawa PDF ke jasa print plotter/kertas marker, minta cetak 100% (bukan "fit"); roll minimal ${num((W + 20) / 10, 0)} cm. Marker lebih dari 4,8 m dicetak bersambung.
+      A4: halaman 1 berisi peta lembar dan kotak uji 10 cm, tempel sesuai kode R/C. Ukur kotak uji dulu sebelum memotong.</p>
+    <div class="downloads"><a class="dl" href="${esc(d.files.pdf)}">${icon("i-dl")}<span>production.pdf<small>ringkasan + denah per ukuran (A4)</small></span></a>
+      <a class="dl" href="${esc(d.files.md)}">${icon("i-dl")}<span>production.md<small>cut list & total (teks)</small></span></a></div>
+    <p class="hint">Denah tampil di meja kerja (tab Denah); ganti ukuran di pojok kanan atas.</p></div>`;
+}
+
+async function loadProductionStory(pid) {
+  let st; try { st = await api(`/api/production-story/${pid}`); } catch { st = null; }
+  if (!$("p-story") || S.production?.job !== pid) return;
+  $("p-story").innerHTML = !st ? callout("info", "Catatan Muse belum tersedia.")
+    : `<div class="muse-note">${museTag(st.source)}<p>${esc(st.owner_summary)}</p><ol>${st.cutting_steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol></div>`;
+}
+
+/* ---------- boot ---------- */
+api("/api/design/catalog").then(c => { S.catalog = c; if (S.step === "sempurnakan") renderRefine(); renderCanvas(); }).catch(() => toast("Gagal memuat katalog gaya."));
+go("desain");
+</script>
+</body>
+</html>
