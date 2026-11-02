@@ -18,6 +18,8 @@ class Settings:
     baseten_api_key: str = field(default="", repr=False)
     baseten_base_url: str = ""
     baseten_model: str = ""
+    # Purpose prefixes routed to Baseten whatever LLM_BACKEND says, e.g. "explain".
+    baseten_tasks: tuple[str, ...] = ()
 
 
 def load_settings(env_path: Path | None = None) -> Settings:
@@ -34,6 +36,7 @@ def load_settings(env_path: Path | None = None) -> Settings:
         baseten_api_key=os.getenv("BASETEN_API_KEY", ""),
         baseten_base_url=os.getenv("BASETEN_BASE_URL", ""),
         baseten_model=os.getenv("BASETEN_MODEL", ""),
+        baseten_tasks=tuple(t.strip() for t in os.getenv("BASETEN_TASKS", "").split(",") if t.strip()),
     )
 
 

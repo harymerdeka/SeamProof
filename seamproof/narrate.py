@@ -23,39 +23,49 @@ from seamproof.verify import Report
 
 LLMFn = Callable[[str, str], dict[str, Any]]
 
-PANEL_ID = {"front": "badan depan", "back": "badan belakang", "sleeve": "lengan", "facing": "lapisan leher",
-            "collar": "kerah", "cuff": "manset", "pocket": "saku", "neckband": "ban leher",
-            "skirt_front": "rok depan", "skirt_back": "rok belakang", "hem_facing": "lapisan kelim",
-            "waist_facing": "lapisan pinggang", "waistband": "ban pinggang"}
-SKIRT_PANEL_ID = {"front": "rok depan", "back": "rok belakang"}
-EDGE_ID = {"shoulder": "bahu", "side_upper": "sisi atas", "side_lower": "sisi bawah", "side_low": "sisi bawah",
-           "side": "sisi", "armhole": "kerung lengan", "cap": "puncak lengan", "neckline": "kerung leher",
-           "neck": "leher", "underarm_front": "jahitan bawah lengan", "underarm_back": "jahitan bawah lengan",
-           "waist_cf": "pinggang", "waist_side": "pinggang", "hem": "kelim", "scallop": "kelim scallop",
-           "attach": "tepi sambung", "cuff_join": "ujung lengan", "edge": "tepi depan", "slit": "belahan",
-           "cb": "tengah belakang", "collar_line": "garis kerah",
-           "dart_leg1": "kaki kupnat", "dart_leg2": "kaki kupnat",
-           "wdart_leg1": "kaki kupnat pinggang", "wdart_leg2": "kaki kupnat pinggang"}
-CONSTRUCTION_ID = {"waist_seam": "badan dan rok disambung di pinggang", "shift": "satu potong tanpa sambungan pinggang"}
-GARMENT_ID = {"tshirt": "kaos", "blouse": "blus", "tunic": "tunik", "shirt": "kemeja", "skirt": "rok",
-              "dress": "dress", "bodice": "blok badan"}
-FABRIC_ID = {"knit_low_stretch": "rajut sedikit melar (kaos combed, pique)",
-             "knit_high_stretch": "rajut sangat melar (spandex, jersey)",
-             "woven": "tenun (katun, linen, rayon, toyobo)"}
+PANEL_ID = {"front": "front bodice", "back": "back bodice", "sleeve": "sleeve", "facing": "neck facing",
+            "collar": "collar", "cuff": "cuff", "pocket": "pocket", "neckband": "neckband",
+            "skirt_front": "front skirt", "skirt_back": "back skirt", "hem_facing": "hem facing",
+            "waist_facing": "waist facing", "waistband": "waistband",
+            "armhole_bias": "armhole bias", "neck_bias": "neck bias"}
+SKIRT_PANEL_ID = {"front": "front skirt", "back": "back skirt"}
+EDGE_ID = {"shoulder": "shoulder", "side_upper": "upper side", "side_lower": "lower side", "side_low": "lower side",
+           "side": "side", "armhole": "armhole", "cap": "sleeve cap", "neckline": "neckline",
+           "neck": "neck", "underarm_front": "underarm seam", "underarm_back": "underarm seam",
+           "waist_cf": "waist", "waist_side": "waist", "hem": "hem", "scallop": "scallop hem",
+           "attach": "joining edge", "cuff_join": "sleeve hem", "edge": "front edge", "slit": "slit",
+           "cb": "centre back", "collar_line": "collar line",
+           "dart_leg1": "dart leg", "dart_leg2": "dart leg",
+           "wdart_leg1": "waist dart leg", "wdart_leg2": "waist dart leg"}
+# How a finish piece is sewn on, in words (no numbers), so Muse orders the steps right.
+FINISH_ID = {
+    "armhole_bias": ("Armhole bias: sew the shoulder and side first, join both bias ends into a ring, "
+                     "then attach the bias folded double to the armhole."),
+    "neck_bias": ("Neck bias: two bias strips joined at centre back, attached from the left front edge "
+                  "to the right front edge, ends folded in at the front edge (not a ring)."),
+    "facing": "Neck facing: attach after the shoulders are sewn, turn it inside, then understitch.",
+}
+ZIP_ID = "Concealed zip on the left side: leave an opening in the left side seam and set the zip before the hem."
+CONSTRUCTION_ID = {"waist_seam": "bodice and skirt joined at the waist", "shift": "one piece with no waist seam"}
+GARMENT_ID = {"tshirt": "T-shirt", "blouse": "blouse", "tunic": "tunic", "shirt": "shirt", "skirt": "skirt",
+              "dress": "dress", "bodice": "bodice block"}
+FABRIC_ID = {"knit_low_stretch": "low-stretch knit (combed cotton, pique)",
+             "knit_high_stretch": "high-stretch knit (spandex, jersey)",
+             "woven": "woven (cotton, linen, rayon, toyobo)"}
 
-_RULES = ("Pakai HANYA angka yang ada di data fakta (boleh mm ditulis cm atau m). Jangan menghitung, "
-          "menjumlah, membulatkan ulang atau menebak angka. Tulis hitungan dengan kata (dua, tiga), "
-          "jangan memberi nomor urut pada langkah. Bahasa Indonesia sederhana untuk penjahit konveksi; "
-          "jangan menulis id teknis (kata bertitik atau bergaris bawah), pakai nama Indonesia dari data.")
+_RULES = ("Use ONLY numbers found in the facts data (mm may be written as cm or m). Do NOT compute, "
+          "add up, re-round or guess numbers. Spell counts as words (two, three) and do not number "
+          "the steps. Write plain English for garment workshop tailors; do not write technical ids "
+          "(dotted or underscored words), use the plain names from the data.")
 
-# Assumption, as in explain.py: a dot before exactly three digits is a thousands
-# separator ("1.500"), a comma is the decimal mark ("17,78"); "17.5" also reads as decimal.
+# Assumption, as in explain.py: a dot or comma before exactly three digits is a thousands
+# separator ("1.500", "1,500"); otherwise either one is the decimal mark ("17,78", "17.5").
 _NUM = re.compile(r"\d+(?:[.,]\d+)*")
 
 
 def _parse(token: str) -> tuple[float, int] | None:
     """Read one number token; return (value, decimals written)."""
-    text = re.sub(r"\.(?=\d{3}(?:\D|$))", "", token)
+    text = re.sub(r"[.,](?=\d{3}(?:\D|$))", "", token)
     if text.count(",") > 1 or (text.count(".") and text.count(",")):
         return None
     text = text.replace(",", ".")
@@ -143,13 +153,14 @@ PATTERN_SCHEMA: dict[str, Any] = {
 }
 
 PATTERN_SYSTEM = (
-    "Kamu kepala jahit di konveksi. Dari data fakta pola (hasil kode, sudah diverifikasi) tulis JSON: "
-    '{"summary": "dua-tiga kalimat: arti hasil verifikasi untuk penjahit", '
-    '"sewing_steps": ["urutan jahit, satu kalimat per langkah, enam sampai dua belas langkah"], '
-    '"toile_checks": ["empat sampai delapan hal yang DILIHAT pada toile saat dipakai badan: jatuhnya kain, '
-    'tarikan, kerutan, letak ujung kupnat, keseimbangan kelim; jangan mengulang angka pemeriksaan"]}. '
-    "Urutan jahit mengikuti kebiasaan konveksi: kupnat dulu, lalu bahu, leher, lengan, sisi, kelim; "
-    "pakai daftar sambungan. Angka hanya bila perlu (mis. lebar kampuh). " + _RULES
+    "You are the head tailor in a garment workshop. From the pattern facts (computed by code, already verified) write JSON: "
+    '{"summary": "two or three sentences: what the verification result means for the tailor", '
+    '"sewing_steps": ["sewing order, one sentence per step, six to twelve steps"], '
+    '"toile_checks": ["four to eight things to LOOK AT on the toile when worn: how the fabric falls, '
+    'pulling, puckering, dart tip position, hem balance; do not repeat check numbers"]}. '
+    "The sewing order follows workshop habit: darts first, then shoulder, neck, sleeve, side, hem; "
+    "use the seams list. When 'finishes' are present, their order and method MUST be followed "
+    "(e.g. armhole bias goes on after the side is sewn). Use numbers only when needed (e.g. seam allowance). " + _RULES
 )
 
 
@@ -167,23 +178,25 @@ def pattern_facts(pattern: Pattern, report: Report) -> dict[str, Any]:
     darts = {name: {k: _r(v) for k, v in d.items() if k.endswith("_mm")}
              for name, d in (pattern.metadata.get("darts") or {}).items() if isinstance(d, dict)}
     return {
-        "garmen": GARMENT_ID.get(pattern.garment_type, pattern.garment_type), "ukuran": pattern.size_label,
-        "kain": FABRIC_ID.get(pattern.fabric, pattern.fabric), "lulus": report.passed,
-        "panel": [{"nama_id": names.get(p.name, p.name), "id": p.name, "potong": p.cut_count,
-                   "lipatan": p.cut_on_fold} for p in pattern.panels],
-        "sambungan": sorted(list(pair) for pair in seams),
-        "kampuh_mm": {"biasa_mm": allowance.get("default", 10), "kelim_mm": allowance.get("hem", 25)},
-        "kupnat": darts,
-        "kerutan": {f"{k}_mm": round(float(v), 1) for k, v in (pattern.metadata.get("gathers_mm") or {}).items()
+        "garment": GARMENT_ID.get(pattern.garment_type, pattern.garment_type), "size": pattern.size_label,
+        "fabric": FABRIC_ID.get(pattern.fabric, pattern.fabric), "passed": report.passed,
+        "panels": [{"name": names.get(p.name, p.name), "id": p.name, "cut": p.cut_count,
+                   "on_fold": p.cut_on_fold} for p in pattern.panels],
+        "seams": sorted(list(pair) for pair in seams),
+        "seam_allowance_mm": {"regular_mm": allowance.get("default", 10), "hem_mm": allowance.get("hem", 25)},
+        "darts": darts,
+        "gathers": {f"{k}_mm": round(float(v), 1) for k, v in (pattern.metadata.get("gathers_mm") or {}).items()
                     if float(v) > 0},
-        "konstruksi": CONSTRUCTION_ID.get(pattern.metadata.get("construction", ""), ""),
-        "pemeriksaan": [{"id": c.id, "nama": c.name_id, "lulus": c.passed, "nilai_mm": _r(c.actual),
-                         "harapan_mm": _r(c.expected), "batas_mm": _r(c.tolerance)} for c in report.checks],
+        "construction": CONSTRUCTION_ID.get(pattern.metadata.get("construction", ""), ""),
+        "finishes": [FINISH_ID[p.name] for p in pattern.panels if p.name in FINISH_ID]
+        + ([ZIP_ID] if pattern.garment_type in ("dress", "skirt") else []),
+        "checks": [{"id": c.id, "name": c.name_id, "passed": c.passed, "actual_mm": _r(c.actual),
+                         "expected_mm": _r(c.expected), "tolerance_mm": _r(c.tolerance)} for c in report.checks],
     }
 
 
 def _edge_name(names: dict[str, str], panel: str, edge_id: str) -> str:
-    """Indonesian 'panel tepi' name for an edge id like front.shoulder."""
+    """Plain 'panel — edge' name for an edge id like front.shoulder."""
     suffix = edge_id.split(".", 1)[-1]
     return f"{names.get(panel, panel)} — {EDGE_ID.get(suffix, suffix.replace('_', ' '))}"
 
@@ -192,10 +205,10 @@ def _pattern_template(pattern: Pattern, report: Report) -> PatternStory:
     """Deterministic story when Muse is unavailable or wrote a stray number."""
     total, failed = len(report.checks), report.failures()
     label = GARMENT_ID.get(pattern.garment_type, pattern.garment_type)
-    summary = (f"Semua {total} pemeriksaan lulus — pola {label} {pattern.size_label} siap dibuat toile."
-               if not failed else f"{len(failed)} dari {total} pemeriksaan gagal: "
-               + ", ".join(f"{c.id} {c.name_id}" for c in failed) + ". Perbaiki sebelum toile.")
-    checks = [f"Cek {c.name_id.lower()} pada toile ({c.id})." for c in report.checks
+    summary = (f"All {total} checks passed — the {label} {pattern.size_label} pattern is ready for a toile."
+               if not failed else f"{len(failed)} of {total} checks failed: "
+               + ", ".join(f"{c.id} {c.name_id}" for c in failed) + ". Fix before the toile.")
+    checks = [f"Check the {c.name_id.lower()} on the toile ({c.id})." for c in report.checks
               if c.id[0] in "SWDK" and c.passed][:6]
     return PatternStory(summary, [], checks, "template")
 
@@ -234,10 +247,10 @@ PRODUCTION_SCHEMA: dict[str, Any] = {
 }
 
 PRODUCTION_SYSTEM = (
-    "Kamu kepala potong di konveksi. Dari data fakta produksi (hasil kode) tulis JSON: "
-    '{"cutting_steps": ["langkah gelar dan potong per ukuran: berapa kali gelar, berapa lapis, '
-    'panjang marker; satu kalimat per langkah"], '
-    '"owner_summary": "dua-tiga kalimat untuk pemilik: total kain, biaya, ukuran yang belum lulus"}. '
+    "You are the head cutter in a garment workshop. From the production facts (computed by code) write JSON: "
+    '{"cutting_steps": ["spreading and cutting steps per size: how many spreads, how many layers, '
+    'marker length; one sentence per step"], '
+    '"owner_summary": "two or three sentences for the owner: total fabric, cost, sizes not yet passed"}. '
     + _RULES
 )
 
@@ -246,19 +259,19 @@ def production_facts(report) -> dict[str, Any]:
     """Facts for production notes; spreads per size are computed here, not by the model."""
     sizes = []
     for item in report.sizes:
-        sizes.append({"ukuran": item.size, "jatah": item.qty, "lulus": item.verified,
-                      "gelar": math.ceil(item.qty / report.layers), "lapis_per_gelar": report.layers,
-                      "panjang_marker_mm": round(item.marker.used_length_mm),
-                      "meter_kain": round(item.metres, 2),
-                      "utilisasi_persen": round(item.marker.utilisation * 100, 1),
-                      "potongan_per_marker": len(item.marker.placements)})
-    return {"garmen": GARMENT_ID.get(report.garment, report.garment),
-            "kain": FABRIC_ID.get(report.fabric, report.fabric),
-            "lebar_kain_mm": round(report.fabric_width_mm), "harga_per_meter": round(report.price_per_m),
-            "ukuran": sizes, "total_meter": round(report.total_metres, 2),
-            "total_biaya_rupiah": round(report.total_cost),
-            "total_potong": sum(item.qty for item in report.sizes),
-            "utilisasi_total_persen": round(report.overall_utilisation * 100, 1),
+        sizes.append({"size": item.size, "quantity": item.qty, "passed": item.verified,
+                      "spreads": math.ceil(item.qty / report.layers), "layers_per_spread": report.layers,
+                      "marker_length_mm": round(item.marker.used_length_mm),
+                      "fabric_metres": round(item.metres, 2),
+                      "utilisation_percent": round(item.marker.utilisation * 100, 1),
+                      "pieces_per_marker": len(item.marker.placements)})
+    return {"garment": GARMENT_ID.get(report.garment, report.garment),
+            "fabric": FABRIC_ID.get(report.fabric, report.fabric),
+            "fabric_width_mm": round(report.fabric_width_mm), "price_per_metre": round(report.price_per_m),
+            "sizes": sizes, "total_metres": round(report.total_metres, 2),
+            "total_cost_rupiah": round(report.total_cost),
+            "total_units": sum(item.qty for item in report.sizes),
+            "overall_utilisation_percent": round(report.overall_utilisation * 100, 1),
             "cut_list": dict(report.cut_list)}
 
 
@@ -267,10 +280,10 @@ def _production_template(report) -> ProductionStory:
     steps = []
     for item in report.sizes:
         if not item.verified:
-            steps.append(f"Ukuran {item.size}: belum lulus verifikasi — jangan dipotong dulu.")
+            steps.append(f"Size {item.size}: not verified yet — do not cut it.")
             continue
-        steps.append(f"Ukuran {item.size}: gelar {math.ceil(item.qty / report.layers)} kali, "
-                     f"{report.layers} lapis per gelar, marker {item.marker.used_length_mm / 1000:.2f} m.")
+        steps.append(f"Size {item.size}: {math.ceil(item.qty / report.layers)} spreads, "
+                     f"{report.layers} layers per spread, marker {item.marker.used_length_mm / 1000:.2f} m.")
     return ProductionStory(steps, report.summary_id(), "template")
 
 
@@ -297,9 +310,9 @@ FABRIC_SCHEMA: dict[str, Any] = {
 }
 
 FABRIC_SYSTEM = (
-    "Kamu penasihat kain di konveksi. Pilih SATU kategori dari 'kandidat' (semuanya sudah lulus "
-    "verifikasi pola) yang paling cocok untuk desain ini, lalu beri alasan singkat dan contoh kain "
-    'yang mudah dibeli. JSON: {"fabric": "<id kandidat>", "reason": "satu-dua kalimat"}. ' + _RULES
+    "You are the fabric adviser in a garment workshop. Choose ONE category from 'candidates' (all have passed "
+    "pattern verification) that best suits this design, then give a short reason and example fabrics "
+    'that are easy to buy. JSON: {"fabric": "<candidate id>", "reason": "one or two sentences"}. ' + _RULES
 )
 
 
@@ -316,11 +329,11 @@ def suggest_fabric(garment: str, candidates: list[str], features: dict[str, Any]
                    brief: str = "", llm_fn: LLMFn | None = None) -> FabricSuggestion:
     """Muse picks among verified candidates; the first candidate is the fallback."""
     if not candidates:
-        raise ValueError("Tidak ada kategori kain yang lulus verifikasi untuk desain ini.")
-    facts = {"garmen": GARMENT_ID.get(garment, garment), "gaya": features or {}, "brief": brief[:2000],
-             "kandidat": [{"id": c, "nama": FABRIC_ID.get(c, c)} for c in candidates]}
+        raise ValueError("No fabric category passes verification for this design.")
+    facts = {"garment": GARMENT_ID.get(garment, garment), "style": features or {}, "brief": brief[:2000],
+             "candidates": [{"id": c, "name": FABRIC_ID.get(c, c)} for c in candidates]}
     fallback = FabricSuggestion(candidates[0], f"{FABRIC_ID.get(candidates[0], candidates[0]).capitalize()} "
-                                f"lulus verifikasi untuk {GARMENT_ID.get(garment, garment)} ini.")
+                                f"passes verification for this {GARMENT_ID.get(garment, garment)}.")
     raw = _call(FABRIC_SYSTEM, facts, FABRIC_SCHEMA, f"fabric-{garment}", llm_fn)
     if not isinstance(raw, dict) or raw.get("fabric") not in candidates or not isinstance(raw.get("reason"), str):
         return fallback

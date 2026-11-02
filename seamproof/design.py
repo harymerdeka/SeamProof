@@ -3,7 +3,8 @@
 Model choice: Muse Spark (MUSE_MODEL through llm.call_json, so LLM_BACKEND
 can still switch to Baseten). The brief and the refine step are text-only;
 reference photos keep going to Muse Wonder (seamproof.vision); SAM is not
-needed because no mask or measurement is taken from images.
+needed because no mask is taken from images. Models never report measurements;
+seamproof.sketchfit measures a drawn sketch's proportions in code.
 
 Division of labour, same as the photo path:
 - Muse only picks *categories* (garment kind, collar, sleeve, colour key...)
@@ -82,15 +83,20 @@ _CATALOGUE = (
     f"Dress kinds: {'|'.join(DRESS_KINDS)}. Dress features — {_options(DRESS_FEATURES)}; "
     "waist_seam: true|false; pockets: 0|1|2; cuff: true|false; elastic_cuff: true|false.\n"
     f"Colours: {'|'.join(COLORS)}. Fabrics: {'|'.join(sorted(FABRIC_EASE))}.\n"
-    "The pattern library drafts: shirt (button front, collar none/shirt_collar/peter_pan, any sleeve "
-    "except sleeveless, sleeve_style straight/bishop/puff, plain or elastic cuffs), tshirt, blouse and tunic (standard blocks), skirt, and dress (one piece, no collar, side zip; "
-    "scalloped hem only with waist_seam). Prefer these."
+    "The pattern library drafts: shirt (button front, collar none/shirt_collar/peter_pan/band, any sleeve "
+    "length, neckline round, v, scoop or boat when there is no collar, "
+    "sleeve_style straight/bishop/puff, plain or elastic cuffs), vest (a sleeveless button-front shirt), "
+    "blouse and tunic (darted, no collar or button front, any sleeve length including sleeveless, those necklines, "
+    "those sleeve styles and cuffs; a tunic has length hip to below_knee and its fit sets the hem flare), tshirt, skirt, "
+    "and dress (one piece, no collar, side zip, sleeveless or sleeved, neckline round or v; "
+    "scalloped hem only with waist_seam). Prefer these. Spaghetti straps, a V deeper than about 14 cm "
+    "and wrap/crossover fronts are not drafted."
 )
 DESIGN_SYSTEM = (
-    "You are a fashion designer helping a small Indonesian garment workshop (konveksi). "
+    "You are a fashion designer helping a small Indonesian garment workshop. "
     "Turn the customer's brief into garment designs a pattern maker can draft. "
     "Use ONLY the allowed category values; never give measurements, centimetres or millimetres. "
-    "Write name, reason and unsupported in Bahasa Indonesia, short and plain. "
+    "Write name, reason and unsupported in English, short and plain. "
     "Be honest about fidelity: the categories are all the pattern can draw. Every detail of the brief "
     "that no category captures (e.g. ruffles, pleats, prints, embroidery, puff sleeves on a dress, or "
     "trousers or any other garment not designed) MUST be listed in unsupported, and reason must only "
@@ -100,26 +106,26 @@ DESIGN_SYSTEM = (
     "(a buying note, not pattern); mood or occasion words such as elegant, modern, office."
 )
 DESIGN_USER = (
-    "Brief pelanggan:\n{brief}\n\n"
+    "Customer brief (may be in Indonesian or English):\n{brief}\n\n"
     "Give exactly two options for the main garment of the brief. Option 1 follows the brief as "
     "closely as the categories allow (closest value when nothing matches exactly). Option 2 changes "
     "exactly one style choice and keeps everything else of option 1. "
-    "JSON: {{\"options\": [{{\"name\": \"nama model, max 5 kata\", \"part\": \"top|bottom|dress\", "
+    "JSON: {{\"options\": [{{\"name\": \"model name, at most 5 words\", \"part\": \"top|bottom|dress\", "
     "\"kind\": ..., \"features\": {{...}}, \"color\": ..., \"fabric\": ..., "
-    "\"reason\": \"satu kalimat: apa yang ditunjukkan kategori\", "
-    "\"unsupported\": [\"detail brief yang belum bisa dibuat pola\"]}}]}}.\n" + _CATALOGUE
+    "\"reason\": \"one sentence: what the categories show\", "
+    "\"unsupported\": [\"brief details the pattern cannot make yet\"]}}]}}.\n" + _CATALOGUE
 )
 REFINE_SYSTEM = (
     "You edit one garment design for a pattern maker. Change ONLY what the instruction asks; "
     "copy every other value unchanged. Use only the allowed category values; never give "
-    "measurements. Write reason in Bahasa Indonesia, one short sentence. If the instruction asks for "
+    "measurements. Write reason in English, one short sentence. If the instruction asks for "
     "something no category can show (e.g. ruffles, pleats, prints), keep the values and list it in "
     "unsupported instead of pretending a category covers it. Bishop/puff sleeves and elastic cuffs on "
     "a shirt ARE categories (sleeve_style, elastic_cuff)."
 )
 REFINE_USER = (
-    "Desain sekarang (JSON): {current}\nPerubahan yang diminta: {instruction}\n\n"
-    "JSON: {{\"kind\": ..., \"features\": {{...semua fitur...}}, \"color\": ..., \"reason\": ..., "
+    "Current design (JSON): {current}\nRequested change: {instruction}\n\n"
+    "JSON: {{\"kind\": ..., \"features\": {{...all features...}}, \"color\": ..., \"reason\": ..., "
     "\"unsupported\": [...]}}. "
     "The part (top/bottom/dress) cannot change.\n" + _CATALOGUE
 )
@@ -167,7 +173,7 @@ def _color(value: Any, warnings: list[str]) -> str:
     """Coerce a colour key, recording unknown ones."""
     key = str(value or DEFAULT_COLOR).strip().lower().replace(" ", "_")
     if key not in COLORS:
-        warnings.append(f"Warna '{value}' tidak dikenal — dipakai {COLORS[DEFAULT_COLOR][1]}.")
+        warnings.append(f"Unknown colour '{value}' — using {COLORS[DEFAULT_COLOR][1]}.")
         key = DEFAULT_COLOR
     return key
 
@@ -177,7 +183,7 @@ def _fabric(value: Any, warnings: list[str]) -> str | None:
     fabric = str(value or "")
     if fabric not in FABRIC_EASE:
         if value:
-            warnings.append(f"Kain '{value}' tidak dikenal — kain mengikuti saran garmen.")
+            warnings.append(f"Unknown fabric '{value}' — using the garment's suggested fabric.")
         return None
     return fabric
 
@@ -192,7 +198,7 @@ def _piece(raw: dict[str, Any], warnings: list[str]) -> GarmentPiece | None:
     if part in MERGE_GROUPS and isinstance(given, dict):
         known = [k for k in given if k != "part" and _allowed(str(part), k) is None]
         if known:
-            warnings.append(f"Fitur {', '.join(map(str, known))} tidak ada di pustaka pola — diabaikan.")
+            warnings.append(f"Features {', '.join(map(str, known))} are not in the pattern library — ignored.")
     reading = validate_reading({"pieces": [{"part": raw.get("part"), "kind": raw.get("kind"),
                                             "features": raw.get("features") or {}}]})
     warnings.extend(reading.warnings)
@@ -203,7 +209,7 @@ def design_from_brief(brief: str, call_fn: CallFn | None = None) -> list[DesignO
     """Ask Muse for two options and validate them; raise LLMValidationError if none survive."""
     brief = brief.strip()
     if len(brief) < 3:
-        raise ValueError("Tulis brief desain dulu (minimal satu kalimat).")
+        raise ValueError("Write a design brief first (at least one sentence).")
     call = call_fn or llm_module.call_json
     raw = call(DESIGN_SYSTEM, DESIGN_USER.format(brief=brief[:MAX_BRIEF_CHARS]), DESIGN_SCHEMA, "design_brief")
     options: list[DesignOption] = []
@@ -214,12 +220,12 @@ def design_from_brief(brief: str, call_fn: CallFn | None = None) -> list[DesignO
             continue
         plan = plan_piece(piece.part, piece.kind, piece.features)
         color = _color(item.get("color"), warnings)
-        options.append(DesignOption(str(item.get("name") or "Desain baru")[:60], piece, color,
+        options.append(DesignOption(str(item.get("name") or "New design")[:60], piece, color,
                                     _fabric(item.get("fabric"), warnings),
                                     str(item.get("reason") or "")[:240], plan, warnings,
                                     _unsupported(item.get("unsupported"))))
     if not options:
-        raise llm_module.LLMValidationError("Model tidak memberi opsi desain yang bisa dipakai.")
+        raise llm_module.LLMValidationError("The model gave no usable design option.")
     return options
 
 
@@ -240,11 +246,11 @@ def refine_design(current: dict[str, Any], instruction: str, call_fn: CallFn | N
     """Apply one free-text change via Muse; the part is locked and the diff is ours."""
     instruction = instruction.strip()
     if len(instruction) < 3:
-        raise ValueError("Tulis perubahan yang diinginkan.")
+        raise ValueError("Write the change you want.")
     warnings: list[str] = []
     before = _piece(current, warnings)
     if before is None:
-        raise ValueError("Desain sekarang tidak valid (part harus top, bottom atau dress).")
+        raise ValueError("The current design is invalid (part must be top, bottom or dress).")
     before_color = _color(current.get("color"), warnings)
     state = {"part": before.part, "kind": before.kind, "features": before.features, "color": before_color}
     call = call_fn or llm_module.call_json
@@ -254,38 +260,38 @@ def refine_design(current: dict[str, Any], instruction: str, call_fn: CallFn | N
     merged = {**before.features, **(raw.get("features") or {})}
     after = _piece({"part": before.part, "kind": raw.get("kind"), "features": merged}, warnings)
     if after is None:  # unreachable: part comes from the validated current design
-        raise llm_module.LLMValidationError("Model mengubah bagian garmen.")
+        raise llm_module.LLMValidationError("The model changed the garment part.")
     color = _color(raw.get("color") or before_color, warnings)
     changes = diff_design(before, before_color, after, color)
     unsupported = _unsupported(raw.get("unsupported"))
     if not changes:
-        warnings.append("Tidak ada kategori yang berubah — " + (
-            "detail ini belum bisa dibuat pola: " + "; ".join(unsupported) + "." if unsupported
-            else "perubahan ini mungkin belum didukung pola."))
+        warnings.append("No category changed — " + (
+            "the pattern cannot make this detail yet: " + "; ".join(unsupported) + "." if unsupported
+            else "the pattern may not support this change yet."))
     elif len(changes) > 2:
-        warnings.append(f"{len(changes)} hal berubah sekaligus — cek satu per satu sebelum lanjut.")
+        warnings.append(f"{len(changes)} things changed at once — check them one by one before continuing.")
     plan = plan_piece(after.part, after.kind, after.features)
     return Refinement(after, color, str(raw.get("reason") or "")[:240], plan, changes, warnings, unsupported)
 
 
 # Parts of a garment the user can take from different photos (pjstudio-style
 # "front from photo 1, sleeves from photo 2"). Assumption: photo categories
-# carry no front/back split, so "badan depan" groups the front-only details.
+# carry no front/back split, so "front bodice" groups the front-only details.
 MERGE_GROUPS: dict[str, list[tuple[str, str, tuple[str, ...]]]] = {
-    "top": [("siluet", "Jenis, siluet & panjang", ("kind", "fit", "length")),
-            ("badan", "Badan depan (bukaan, saku)", ("opening", "pockets")),
-            ("lengan", "Lengan & bahu", ("sleeve_length", "sleeve_style", "shoulder", "cuff", "elastic_cuff",
+    "top": [("siluet", "Kind, silhouette & length", ("kind", "fit", "length")),
+            ("badan", "Front bodice (opening, pockets)", ("opening", "pockets")),
+            ("lengan", "Sleeves & shoulder", ("sleeve_length", "sleeve_style", "shoulder", "cuff", "elastic_cuff",
                                          "contrast_cuff")),
-            ("kerah", "Kerah", ("collar", "contrast_collar"))],
-    "bottom": [("siluet", "Jenis & siluet", ("kind", "silhouette")),
-               ("panjang", "Panjang", ("length",)),
-               ("kelim", "Kelim", ("hem",)),
-               ("pinggang", "Ban pinggang", ("waistband",))],
-    "dress": [("badan", "Badan (siluet, bukaan, saku)", ("fit", "opening", "pockets")),
-              ("lengan", "Lengan & bahu", ("sleeve_length", "shoulder", "cuff", "contrast_cuff")),
-              ("kerah", "Kerah", ("collar", "contrast_collar")),
-              ("rok", "Rok (siluet, panjang, kelim)", ("silhouette", "length", "hem")),
-              ("pinggang", "Sambungan pinggang", ("waist_seam",))],
+            ("kerah", "Collar & neckline", ("collar", "neckline", "contrast_collar"))],
+    "bottom": [("siluet", "Kind & silhouette", ("kind", "silhouette")),
+               ("panjang", "Length", ("length",)),
+               ("kelim", "Hem", ("hem",)),
+               ("pinggang", "Waistband", ("waistband",))],
+    "dress": [("badan", "Bodice (silhouette, opening, pockets)", ("fit", "opening", "pockets")),
+              ("lengan", "Sleeves & shoulder", ("sleeve_length", "shoulder", "cuff", "contrast_cuff")),
+              ("kerah", "Collar & neckline", ("collar", "neckline", "contrast_collar")),
+              ("rok", "Skirt (silhouette, length, hem)", ("silhouette", "length", "hem")),
+              ("pinggang", "Waist seam", ("waist_seam",))],
 }
 _TABLES = {"top": (TOP_KINDS, TOP_FEATURES), "bottom": (BOTTOM_KINDS, BOTTOM_FEATURES),
            "dress": (DRESS_KINDS, DRESS_FEATURES)}
@@ -338,7 +344,7 @@ def merge_photos(target: str, base: int, sources: dict[int, Any], assign: dict[s
     first piece that can lend it (same part first).
     """
     if target not in MERGE_GROUPS:
-        raise ValueError(f"Jenis gabungan tidak dikenal: {target} (top|bottom|dress).")
+        raise ValueError(f"Unknown merge type: {target} (top|bottom|dress).")
     warnings: list[str] = []
     pieces: dict[int, list[GarmentPiece]] = {}
     for number, raw in sources.items():
@@ -347,7 +353,7 @@ def merge_photos(target: str, base: int, sources: dict[int, Any], assign: dict[s
         pieces[int(number)] = sorted(valid, key=lambda p: p.part != target)
     base_piece = next((p for p in pieces.get(base, []) if p.part == target), None)
     if base_piece is None:
-        raise ValueError(f"Foto dasar {base} tidak berisi {target} yang terbaca.")
+        raise ValueError(f"Base photo {base} has no readable {target}.")
     kind, features = base_piece.kind, dict(base_piece.features)
     provenance: dict[str, int] = {}
     groups: list[dict[str, Any]] = []
@@ -357,7 +363,7 @@ def merge_photos(target: str, base: int, sources: dict[int, Any], assign: dict[s
         options = sorted(n for n, p in lenders.items() if p is not None)
         source = int(assign.get(group_id, base))
         if source not in options:
-            raise ValueError(f"Foto {source} tidak punya bagian '{label}' yang bisa dipakai untuk {target}.")
+            raise ValueError(f"Photo {source} has no '{label}' part usable for {target}.")
         lender = lenders[source]
         for key in keys:
             if key == "kind":

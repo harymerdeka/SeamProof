@@ -235,7 +235,7 @@ def test_cli_production_writes_pack(monkeypatch: pytest.MonkeyPatch, tmp_path) -
     assert (out / "marker_S.svg").is_file() and (out / "marker_M.svg").is_file()
     assert (out / "marker_M_plotter.pdf").read_bytes().startswith(b"%PDF")
     text = (out / "production.md").read_text()
-    assert "Rp" in text and "Utilisasi" in text
+    assert "Rp" in text and "Utilisation" in text
 
 
 def test_layers_do_not_change_fabric_metres() -> None:

@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictInt
 
 from seamproof.cli import DEFAULT_FABRIC
@@ -27,13 +28,14 @@ from seamproof.fabric import FABRIC_EASE
 from seamproof.intake import GARMENT_FIELDS, _build_result, parse_text
 from seamproof.measurements import SIZE_TABLE, TShirtMeasurements, WOMEN_SIZE_TABLE, WomenMeasurements
 from seamproof.repair import repair_loop, rounds_table_md
-from seamproof.style import LABELS, StylePlan, plan_piece
+from seamproof.style import LABELS, StylePlan, apply_proportions, plan_piece
 
 GARMENTS = ["tshirt", "blouse", "tunic", "shirt", "skirt", "dress"]
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_JOBS = 50
 
 app = FastAPI(title="SeamProof")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 # Production runs (report + markdown); marker PDFs are rendered on download.
@@ -48,13 +50,13 @@ def _table(garment: str):
 def _check_garment(garment: str) -> None:
     """Reject unknown garments listing what exists."""
     if garment not in GARMENTS:
-        raise HTTPException(422, f"Garmen tak dikenal: {garment} (pilih {', '.join(GARMENTS)}).")
+        raise HTTPException(422, f"Unknown garment: {garment} (choose {', '.join(GARMENTS)}).")
 
 
 def _check_fabric(fabric: str) -> None:
     """Reject unknown fabric categories."""
     if fabric not in FABRIC_EASE:
-        raise HTTPException(422, f"Kain tak dikenal: {fabric}.")
+        raise HTTPException(422, f"Unknown fabric: {fabric}.")
 
 
 def _store(pdf: bytes | None, data: dict[str, Any], svg: str, md: str,
@@ -135,10 +137,10 @@ def check(job: str, payload: SignOff) -> dict[str, Any]:
 
     entry = JOBS.get(job)
     if entry is None:
-        raise HTTPException(404, "Paket tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "Pack not found (was the server just restarted?).")
     report = entry["report"]
     if not report.passed:
-        raise HTTPException(409, "Hanya pola yang lulus verifikasi yang bisa dicek pembuat pola.")
+        raise HTTPException(409, "Only a pattern that passed verification can be checked by a pattern maker.")
     signoff = {"name": payload.name.strip(), "note": payload.note.strip(),
                "at": datetime.now(timezone.utc).isoformat(timespec="minutes")}
     report.meta["signoff"] = signoff
@@ -180,25 +182,25 @@ def pack(payload: dict[str, Any]) -> dict[str, Any]:
     if mode == "size":
         size = str(payload.get("size", "M"))
         if size not in _table(garment):
-            raise HTTPException(422, f"Ukuran tak dikenal: {size}.")
+            raise HTTPException(422, f"Unknown size: {size}.")
         measurements = _table(garment)[size]
     elif mode == "text":
         try:
             result = parse_text(str(payload.get("text", "")), garment)
         except Exception as exc:
-            raise HTTPException(502, f"Pemetaan teks gagal ({type(exc).__name__}); isi ukuran manual.") from exc
+            raise HTTPException(502, f"Text mapping failed ({type(exc).__name__}); enter the measurements by hand.") from exc
         if result["missing"]:
             raise HTTPException(422, {"missing": result["missing"], "warnings": result["warnings"]})
         cls = TShirtMeasurements if garment == "tshirt" else WomenMeasurements
         try:
             measurements = cls(**result["measurements"])
         except (TypeError, ValueError) as exc:
-            raise HTTPException(422, f"Pengukuran tidak valid: {exc}.") from exc
+            raise HTTPException(422, f"Invalid measurements: {exc}.") from exc
     elif mode == "measures":
         unit = str(payload.get("unit", "cm"))
         values = payload.get("measures") or {}
         if not isinstance(values, dict):
-            raise HTTPException(422, "measures harus objek {kolom: nilai}.")
+            raise HTTPException(422, "measures must be an object {field: value}.")
         result = _build_result([(k, v, unit) for k, v in values.items()], garment)
         if result["missing"]:
             raise HTTPException(422, {"missing": result["missing"], "warnings": result["warnings"]})
@@ -206,16 +208,16 @@ def pack(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             measurements = cls(**result["measurements"])
         except (TypeError, ValueError) as exc:
-            raise HTTPException(422, f"Pengukuran tidak valid: {exc}.") from exc
+            raise HTTPException(422, f"Invalid measurements: {exc}.") from exc
     else:
-        raise HTTPException(422, f"Mode tak dikenal: {mode} (size|text|measures).")
+        raise HTTPException(422, f"Unknown mode: {mode} (size|text|measures).")
     plan = _style_plan(payload.get("style"), garment)
     try:
         pattern, report, logs = repair_loop(measurements, fabric, plan.params if plan else {},
                                             garment=garment)
     except ValueError as exc:
         # The draft itself refuses some in-range combinations (e.g. waist vs bust).
-        raise HTTPException(422, f"Ukuran ini tidak bisa digambar: {exc}") from exc
+        raise HTTPException(422, f"These measurements cannot be drafted: {exc}") from exc
     response = _pack_response(pattern, report, logs)
     if plan is not None:
         response["style"] = {"params": plan.params, "notes": plan.notes}
@@ -227,19 +229,30 @@ def _style_plan(raw: Any, garment: str) -> StylePlan | None:
     if raw is None:
         return None
     if not isinstance(raw, dict) or not isinstance(raw.get("features"), dict):
-        raise HTTPException(422, "style harus {part, kind, features}.")
+        raise HTTPException(422, "style must be {part, kind, features}.")
     from seamproof.vision import validate_reading
 
     reading = validate_reading({"pieces": [{"part": raw.get("part"), "kind": raw.get("kind"),
                                             "features": raw["features"]}]})
     if not reading.pieces:
-        raise HTTPException(422, "Bagian gaya tidak dikenal (top|bottom|dress).")
+        raise HTTPException(422, "Unknown style part (top|bottom|dress).")
     piece = reading.pieces[0]
     plan = plan_piece(piece.part, piece.kind, piece.features)
     if plan.garment != garment:
-        raise HTTPException(422, f"Gaya ini dipetakan ke {plan.garment}, bukan {garment}.")
+        raise HTTPException(422, f"This style maps to {plan.garment}, not {garment}.")
     plan.notes = reading.warnings + plan.notes
+    _apply_proportions(plan, raw.get("proportions"))
     return plan
+
+
+def _apply_proportions(plan: StylePlan, proportions: Any) -> None:
+    """Apply fitted proportions when sent; invalid ones are a client error."""
+    if proportions is None:
+        return
+    try:
+        apply_proportions(plan, proportions)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 def _plan_dict(plan: StylePlan, color: str | None = None) -> dict[str, Any]:
@@ -247,8 +260,9 @@ def _plan_dict(plan: StylePlan, color: str | None = None) -> dict[str, Any]:
     from seamproof.flat import drafted_features, plan_flat
     from seamproof.preview3d import plan_preview
 
-    return {"garment": plan.garment, "label": LABELS.get(plan.garment or "", "Belum didukung"),
-            "params": plan.params, "notes": plan.notes, "drafted": drafted_features(plan),
+    return {"garment": plan.garment, "label": LABELS.get("vest" if plan.kind == "vest" else plan.garment or "", "Not supported yet"),
+            "params": plan.params, "proportions": plan.proportions, "notes": plan.notes,
+            "drafted": drafted_features(plan),
             "flat": plan_flat(plan, color), "preview3d": plan_preview(plan, color)}
 
 
@@ -259,12 +273,49 @@ def style_plan(payload: dict[str, Any]) -> dict[str, Any]:
 
     reading = validate_reading({"pieces": [payload]})
     if not reading.pieces:
-        raise HTTPException(422, "Bagian gaya tidak dikenal (top|bottom|dress).")
+        raise HTTPException(422, "Unknown style part (top|bottom|dress).")
     piece = reading.pieces[0]
     plan = plan_piece(piece.part, piece.kind, piece.features)
     plan.notes = reading.warnings + plan.notes
+    _apply_proportions(plan, payload.get("proportions"))
     color = payload.get("color") if isinstance(payload.get("color"), str) else None
     return {"kind": piece.kind, "features": piece.features, "plan": _plan_dict(plan, color)}
+
+
+class SketchFitRequest(BaseModel):
+    """A design's categories and the sketch its proportions should follow."""
+
+    part: str
+    kind: str
+    features: dict[str, Any]
+    svg: str = Field(min_length=10, max_length=200_000)
+    color: str | None = None
+
+
+@app.post("/api/sketch-fit")
+def sketch_fit(payload: SketchFitRequest) -> dict[str, Any]:
+    """Fit skirt or dress flare and length to a sketch (code only, no model call)."""
+    from seamproof.sketchfit import FIT_GARMENTS, fit_to_sketch
+    from seamproof.vision import sanitize_sketch, validate_reading
+
+    reading = validate_reading({"pieces": [{"part": payload.part, "kind": payload.kind, "features": payload.features}]})
+    if not reading.pieces:
+        raise HTTPException(422, "Unknown style part (top|bottom|dress).")
+    piece = reading.pieces[0]
+    plan = plan_piece(piece.part, piece.kind, piece.features)
+    if plan.garment not in FIT_GARMENTS:
+        raise HTTPException(422, "Sketch proportions are available for a skirt or dress only.")
+    plan.notes = reading.warnings + plan.notes
+    try:
+        # Size M, like the category tables; the verifier re-checks the chosen size at drafting.
+        fit = fit_to_sketch(sanitize_sketch(payload.svg), plan.garment, _table(plan.garment)["M"],
+                            DEFAULT_FABRIC[plan.garment], plan.params)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    before = {name: plan.params.get(name) for name in fit.params}
+    apply_proportions(plan, fit.params)
+    return {"kind": piece.kind, "features": piece.features, "before": before, "fit": asdict(fit),
+            "plan": _plan_dict(plan, payload.color)}
 
 
 @app.get("/api/design/catalog")
@@ -296,7 +347,7 @@ def design(payload: DesignBrief) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except llm_module.LLMError as exc:
-        raise HTTPException(502, f"Muse gagal membuat desain ({exc}). Coba lagi atau pilih gaya sendiri.") from exc
+        raise HTTPException(502, f"Muse could not create a design ({exc}). Try again or choose a style yourself.") from exc
     out = []
     for option in options:
         option.plan.notes = option.warnings + option.plan.notes
@@ -338,7 +389,7 @@ def design_merge(payload: PhotoMerge) -> dict[str, Any]:
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except llm_module.LLMError as exc:
-            raise HTTPException(502, f"Muse gagal menerapkan catatan ({exc}). Gabungkan tanpa catatan.") from exc
+            raise HTTPException(502, f"Muse could not apply the notes ({exc}). Merge without notes.") from exc
         piece, plan, color = result.piece, result.plan, result.color
         notes += result.warnings
         changes, reason, unsupported = result.changes, result.reason, result.unsupported
@@ -367,7 +418,7 @@ def design_refine(payload: DesignEdit) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except llm_module.LLMError as exc:
-        raise HTTPException(502, f"Muse gagal menerapkan perubahan ({exc}). Pakai tombol cepat.") from exc
+        raise HTTPException(502, f"Muse could not apply the change ({exc}). Use the quick buttons.") from exc
     result.plan.notes = result.warnings + result.plan.notes
     return {"part": result.piece.part, "kind": result.piece.kind, "features": result.piece.features,
             "color": result.color, "reason": result.reason, "changes": result.changes,
@@ -387,21 +438,21 @@ def photo(file: UploadFile = File(...)) -> dict[str, Any]:
 
     data = file.file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "Foto lebih dari 15 MB — kecilkan dulu.")
+        raise HTTPException(413, "The photo is over 15 MB — make it smaller first.")
     try:
         prepared = prepare_photo(data)
     except ImportError as exc:
-        raise HTTPException(503, "OpenCV belum terpasang: pip install opencv-python-headless") from exc
+        raise HTTPException(503, "OpenCV is not installed: pip install opencv-python-headless") from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     try:
         reading = describe_garments(prepared)
     except llm_module.LLMError as exc:
-        raise HTTPException(502, f"Model vision gagal ({exc}). Coba lagi atau isi gaya manual.") from exc
+        raise HTTPException(502, f"The vision model failed ({exc}). Try again or fill in the style by hand.") from exc
     import base64
 
     return {
-        "filename": file.filename or "foto",
+        "filename": file.filename or "photo",
         "faces_blurred": prepared.faces_blurred,
         "preview": "data:image/jpeg;base64," + base64.b64encode(prepared.jpeg).decode("ascii"),
         "photo_view": reading.photo_view,
@@ -414,6 +465,47 @@ def photo(file: UploadFile = File(...)) -> dict[str, Any]:
                     "bottom": {"kinds": list(BOTTOM_KINDS), **{k: list(v) for k, v in BOTTOM_FEATURES.items()}},
                     "dress": {"kinds": list(DRESS_KINDS), **{k: list(v) for k, v in DRESS_FEATURES.items()}}},
     }
+
+
+@app.post("/api/photo/sketch")
+def photo_sketch(file: UploadFile = File(...)) -> dict[str, str]:
+    """Muse Wonder draws a reference flat from a photo; it never feeds the pattern."""
+    from seamproof import llm as llm_module
+    from seamproof.vision import sketch_from_photo
+
+    prepared = _prepared_upload(file)
+    try:
+        return {"svg": sketch_from_photo(prepared)}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except llm_module.LLMError as exc:
+        raise HTTPException(502, f"The vision model could not draw the sketch ({exc}).") from exc
+
+
+@app.post("/api/photo/sketch-merge")
+def photo_sketch_merge(files: list[UploadFile] = File(...), garment: str = Form(...), parts: str = Form(...),
+                       base: int = Form(...), notes: str = Form("")) -> dict[str, str]:
+    """Muse Wonder draws one reference flat from the chosen part of each photo."""
+    import json
+
+    from seamproof import llm as llm_module
+    from seamproof.vision import merge_sketch
+
+    if not 1 <= len(files) <= 3:
+        raise HTTPException(422, "Send 1 to 3 photos.")
+    try:
+        chosen = [(str(item["label"])[:80], int(item["photo"])) for item in json.loads(parts)]
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(422, "The list of parts is not valid.") from exc
+    if not chosen or len(chosen) > 20:
+        raise HTTPException(422, "The list of parts is not valid.")
+    photos = [_prepared_upload(file) for file in files]
+    try:
+        return {"svg": merge_sketch(photos, garment[:80], chosen, base, notes[:300])}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except llm_module.LLMError as exc:
+        raise HTTPException(502, f"The vision model could not draw the merged sketch ({exc}).") from exc
 
 
 class ProductionRequest(BaseModel):
@@ -440,7 +532,7 @@ def production(payload: ProductionRequest) -> dict[str, Any]:
     _check_fabric(fabric)
     for size in payload.run:
         if size not in _table(garment):
-            raise HTTPException(422, f"Ukuran tak dikenal: {size}.")
+            raise HTTPException(422, f"Unknown size: {size}.")
     spec = ",".join(f"{s}={q}" for s, q in payload.run.items())
     plan = _style_plan(payload.style, garment)
     try:
@@ -448,7 +540,7 @@ def production(payload: ProductionRequest) -> dict[str, Any]:
                          layers=payload.layers, params=plan.params if plan else None)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    label = LABELS.get(garment, garment) + (" (foto)" if plan else "")
+    label = LABELS.get(garment, garment) + (" (photo)" if plan else "")
     md = production_md(report)
     pid = uuid.uuid4().hex[:12]
     with JOBS_LOCK:
@@ -458,7 +550,7 @@ def production(payload: ProductionRequest) -> dict[str, Any]:
     svgs = {}
     for item in report.sizes:
         stream = io.BytesIO()
-        export_marker_svg(item.marker, f"{label} {item.size} — denah potong", stream, item.size)
+        export_marker_svg(item.marker, f"{label} {item.size} — cutting marker", stream, item.size)
         svgs[item.size] = stream.getvalue().decode("utf-8")
     base = f"/api/production/{pid}"
     return {"job": pid, "summary": report.summary_id(),
@@ -485,7 +577,7 @@ def production_file(pid: str, kind: str) -> Response:
 
     entry = PRODUCTIONS.get(pid)
     if entry is None or kind not in ("pdf", "md"):
-        raise HTTPException(404, "Berkas tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "File not found (was the server just restarted?).")
     if kind == "md":
         return Response(entry["md"].encode("utf-8"), media_type="text/markdown",
                         headers={"Content-Disposition": "attachment; filename=production.md"})
@@ -503,7 +595,7 @@ def marker_file(pid: str, size: str, fmt: str) -> Response:
     entry = PRODUCTIONS.get(pid)
     item = None if entry is None else next((i for i in entry["report"].sizes if i.size == size), None)
     if item is None or fmt not in ("plot", "a4", "svg"):
-        raise HTTPException(404, "Berkas tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "File not found (was the server just restarted?).")
     title = f"{entry['label']} {size} — marker"
     stream = io.BytesIO()
     if fmt == "svg":
@@ -511,7 +603,7 @@ def marker_file(pid: str, size: str, fmt: str) -> Response:
         return Response(stream.getvalue(), media_type="image/svg+xml",
                         headers={"Content-Disposition": f"attachment; filename=marker_{size}.svg"})
     if not item.verified:
-        raise HTTPException(409, f"Ukuran {size} belum lulus verifikasi — marker 1:1 tidak dicetak.")
+        raise HTTPException(409, f"Size {size} has not passed verification — the 1:1 marker is not printed.")
     writer = export_marker_plot_pdf if fmt == "plot" else export_marker_tiles_pdf
     writer(item.marker, title, stream, size)
     name = f"marker_{size}_{'plotter' if fmt == 'plot' else 'A4'}.pdf"
@@ -525,11 +617,11 @@ def _prepared_upload(file: UploadFile):
 
     data = file.file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "Foto lebih dari 15 MB — kecilkan dulu.")
+        raise HTTPException(413, "The photo is over 15 MB — make it smaller first.")
     try:
         return prepare_photo(data)
     except ImportError as exc:
-        raise HTTPException(503, "OpenCV belum terpasang: pip install opencv-python-headless") from exc
+        raise HTTPException(503, "OpenCV is not installed: pip install opencv-python-headless") from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -561,7 +653,7 @@ def fabric_suggest(payload: FabricAsk) -> dict[str, Any]:
         except ValueError:
             continue  # this block cannot be drafted in that fabric at all
     if not candidates:
-        raise HTTPException(422, "Tidak ada kategori kain yang lulus verifikasi untuk desain ini.")
+        raise HTTPException(422, "No fabric category passes verification for this design.")
     pick = suggest_fabric(garment, candidates, plan.features if plan else None, payload.brief)
     return {"fabric": pick.fabric, "reason": pick.reason, "source": pick.source, "candidates": candidates}
 
@@ -579,7 +671,7 @@ def measure_photo(file: UploadFile = File(...), garment: str = Form(...)) -> dic
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except llm_module.LLMError as exc:
-        raise HTTPException(502, f"Model vision gagal membaca catatan ({exc}). Ketik ukurannya manual.") from exc
+        raise HTTPException(502, f"The vision model could not read the note ({exc}). Type the measurements by hand.") from exc
     return {"measurements_cm": {k: round(v / 10, 1) for k, v in result["measurements"].items()},
             "missing": result["missing"], "warnings": result["warnings"],
             "faces_blurred": prepared.faces_blurred}
@@ -592,7 +684,7 @@ def pattern_story(job: str) -> dict[str, Any]:
 
     entry = JOBS.get(job)
     if entry is None or entry.get("pattern") is None:
-        raise HTTPException(404, "Pola tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "Pattern not found (was the server just restarted?).")
     if entry.get("story") is None:
         entry["story"] = asdict(narrate_pattern(entry["pattern"], entry["report"]))
     return entry["story"]
@@ -605,7 +697,7 @@ def production_story(pid: str) -> dict[str, Any]:
 
     entry = PRODUCTIONS.get(pid)
     if entry is None:
-        raise HTTPException(404, "Paket produksi tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "Production pack not found (was the server just restarted?).")
     if entry.get("story") is None:
         entry["story"] = asdict(narrate_production(entry["report"]))
     return entry["story"]
@@ -621,13 +713,13 @@ def toile(job: str, notes: str = Form(""), files: list[UploadFile] | None = File
 
     entry = JOBS.get(job)
     if entry is None or entry.get("pattern") is None:
-        raise HTTPException(404, "Pola tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "Pattern not found (was the server just restarted?).")
     files = [f for f in (files or []) if f.filename]
     lines = [line.strip() for line in notes.replace(";", "\n").splitlines() if line.strip()][:10]
     if not files and not lines:
-        raise HTTPException(422, "Kirim foto toile atau tulis catatan masalahnya.")
+        raise HTTPException(422, "Send a toile photo or write a note about the problem.")
     if len(files) > 3:
-        raise HTTPException(422, "Maksimal 3 foto toile.")
+        raise HTTPException(422, "At most 3 toile photos.")
     blurred = [base64.b64encode(_prepared_upload(f).jpeg).decode("ascii") for f in files]
     v1 = entry["pattern"]
     try:
@@ -636,10 +728,10 @@ def toile(job: str, notes: str = Form(""), files: list[UploadFile] | None = File
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:  # the vision model failed after its fallback
-        raise HTTPException(502, f"Model vision gagal membaca toile ({type(exc).__name__}). "
-                                 "Tulis catatan masalahnya saja.") from exc
+        raise HTTPException(502, f"The vision model could not read the toile ({type(exc).__name__}). "
+                                 "Write a note about the problem instead.") from exc
     response: dict[str, Any] = {
-        "issues": [{"key": i.key, "name": RULES[i.key].description_id if i.key in RULES else "Lainnya",
+        "issues": [{"key": i.key, "name": RULES[i.key].description_id if i.key in RULES else "Other",
                     "location": i.location, "severity": i.severity, "evidence": i.evidence}
                    for i in proposal.issues],
         "changes": [{"param": p, "v1": float(v1.params.get(p, 0.0)), "v2": v} for p, v in sorted(proposal.changes.items())],
@@ -656,11 +748,11 @@ def toile(job: str, notes: str = Form(""), files: list[UploadFile] | None = File
 def download(job: str, kind: str) -> Response:
     """Download one stored artifact (pdf, dxf, json, md or svg)."""
     if job not in JOBS or kind not in ("pdf", "json", "md", "svg", "dxf"):
-        raise HTTPException(404, "Berkas tidak ada (server baru dimulai ulang?).")
+        raise HTTPException(404, "File not found (was the server just restarted?).")
     blob = JOBS[job][kind]
     if blob is None:
-        raise HTTPException(409, "DXF terbuka setelah pembuat pola mengecek pola." if kind == "dxf"
-                            else "PDF hanya tersedia untuk pola yang lulus.")
+        raise HTTPException(409, "The DXF opens after a pattern maker has checked the pattern." if kind == "dxf"
+                            else "The PDF is only available for a pattern that passed.")
     media = {"pdf": "application/pdf", "json": "application/json", "dxf": "application/dxf",
              "md": "text/markdown", "svg": "image/svg+xml"}[kind]
     body = blob.encode("utf-8") if isinstance(blob, str) else blob

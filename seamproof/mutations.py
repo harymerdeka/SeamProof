@@ -87,6 +87,33 @@ def m_bishop_gathers(pattern: Pattern) -> Pattern:
     return _move_corner(clone, "sleeve", "sleeve.cuff_join", "sleeve.underarm_front", Point(-100, 0))
 
 
+# Vest style (photo of a navy vest): sleeveless, collarless V neck, button front, two pockets.
+VEST_STYLE = {"sleeveless": 1, "collar_style": 0, "neck_v": 1, "neckline_depth_front": 130, "design_ease": 20,
+              "pocket_count": 2}
+
+
+def _vest() -> Pattern:
+    """Return the pristine M sleeveless V-neck shirt (vest)."""
+    return draft_shirt(WOMEN_SIZE_TABLE["M"], "woven", VEST_STYLE)
+
+
+def m_armhole_bias(pattern: Pattern) -> Pattern:
+    """Cut the armhole bias 5 mm short of the armhole."""
+    return _stretch_rect(pattern, "armhole_bias", "armhole_bias", -5)
+
+
+def m_neck_bias(pattern: Pattern) -> Pattern:
+    """Cut the neck bias 5 mm long."""
+    return _stretch_rect(pattern, "neck_bias", "neck_bias", 5)
+
+
+def m_lost_sleeve(pattern: Pattern) -> Pattern:
+    """Drop the sleeve panel from a sleeved blouse."""
+    clone = copy.deepcopy(pattern)
+    clone.panels = [panel for panel in clone.panels if panel.name != "sleeve"]
+    return clone
+
+
 def _skirt() -> Pattern:
     """Return the pristine M skirt in the sample-photo style."""
     return draft_skirt(WOMEN_SIZE_TABLE["M"], "woven", SKIRT_STYLE)
@@ -118,10 +145,10 @@ def _move_corner(pattern: Pattern, panel: str, before_id: str, after_id: str, de
                       b.needs_allowance, b.allowance_mm, b.is_fold))
 
 
-def _stretch_rect(pattern: Pattern, panel: str, prefix: str, extra: float) -> Pattern:
+def _stretch_rect(pattern: Pattern, panel: str, prefix: str, extra: float, names: tuple[str, str] = ("attach", "end_r")) -> Pattern:
     """Lengthen a rectangular band's attach edge (and its far end) by extra mm."""
     i = _index(pattern, panel)
-    attach, end, outer = (_edge(pattern.panels[i], f"{prefix}.{n}") for n in ("attach", "end_r", "outer"))
+    attach, end, outer = (_edge(pattern.panels[i], f"{prefix}.{n}") for n in (*names, "outer"))
     b, c = attach.curve.points[-1], end.curve.points[-1]
     nb, nc = Point(b.x + extra, b.y), Point(c.x + extra, c.y)
     return _swap(pattern, i, Edge(attach.id, Curve((attach.curve.points[0], nb)), attach.seam_partner_id),
@@ -483,50 +510,54 @@ def m_grainline(pattern: Pattern) -> Pattern:
 Mutator = Callable[[Pattern], Pattern]
 
 MUTATIONS: list[tuple[str, str, str, Mutator]] = [
-    ("G1", "blouse", "Ujung lapisan digeser 7 mm", m_closure),
-    ("G2", "blouse", "Parameter diubah tanpa draft ulang", m_params),
-    ("S1", "blouse", "Bahu belakang dipendekkan 2 mm", m_shoulder),
-    ("S2a", "blouse", "Ketek depan diturunkan 8 mm", m_side_above),
-    ("S2b", "blouse", "Sudut hem belakang dilebarkan 35 mm", m_side_below),
-    ("S3", "blouse", "Kedua kerung lengan dilebarkan", m_cap_ease),
-    ("S4", "blouse", "Leher lapisan dilengkungkan keluar", m_facing),
-    ("S5", "blouse", "Satu sudut hem lengan diturunkan 5 mm", m_underarm),
-    ("S6", "tshirt", "Ban leher dipendekkan 5 mm", m_neckband),
-    ("W1", "blouse", "Kedua ujung kupnat disempitkan 5 mm", m_bust_join),
-    ("W2", "blouse", "Pinggang depan dilebarkan 5 mm", m_waist),
-    ("W3", "blouse", "Pinggul depan dilebarkan 5 mm", m_hip),
-    ("D1", "blouse", "Ujung kupnat diangkat 15 mm", m_legs),
-    ("D2", "blouse", "Ujung kupnat digeser 5 mm ke dalam", m_tip),
-    ("D3", "blouse", "Pangkal kupnat dilebarkan 3 mm", m_intake),
-    ("D4", "blouse", "Ujung kupnat didorong 120 mm", m_kink),
-    ("D5", "blouse", "Satu tanda lubang belakang dibuang", m_drills),
-    ("N1", "blouse", "Satu notch digeser keluar tepi", m_notch),
-    ("N2", "blouse", "Notch nol depan dibuang", m_shoulder_notch),
-    ("R1", "blouse", "Arah serat dimiringkan", m_grainline),
-    ("S2", "shirt", "Sudut hem belakang kemeja diturunkan 6 mm", m_shirt_side),
-    ("S7", "shirt", "Manset dipanjangkan 4 mm", m_cuff),
-    ("S8", "shirt", "Ujung leher kerah ditarik 6 mm", m_collar),
-    ("W1", "shirt", "Ketiak belakang kemeja dilebarkan 5 mm", m_shirt_chest),
-    ("W3", "shirt", "Hem kemeja disempitkan 80 mm per sisi", m_shirt_hem),
-    ("K1", "skirt", "Ujung kupnat rok digeser 10 mm", m_skirt_dart),
-    ("K2", "skirt", "Lapisan pinggang dipendekkan 5 mm", m_waist_finish),
-    ("K3", "skirt", "Satu scallop lapisan kelim dilengkungkan 10 mm", m_hem_facing),
-    ("W2", "skirt", "Pinggang rok dilebarkan 3 mm (lapisan ikut)", m_skirt_waist),
-    ("W3", "skirt", "Pinggul rok dilebarkan 5 mm", m_skirt_hip),
-    ("S7", "bishop", "Manset karet dipanjangkan 4 mm", m_bishop_cuff),
-    ("S9", "bishop", "Ujung lengan bishop dilebarkan 100 mm per sisi", m_bishop_gathers),
-    ("K4", "dress", "Pinggang rok dress dilebarkan 3 mm", m_dress_waist_seam),
-    ("D6", "dress", "Ujung kupnat pinggang depan digeser 10 mm", m_dress_front_dart),
-    ("D5", "dress", "Ujung kupnat belakang dress digeser 20 mm", m_dress_back_dart),
-    ("K1", "dress", "Ujung kupnat rok dress digeser 10 mm", m_dress_skirt_dart),
-    ("W2", "dress", "Pinggang badan + rok depan dilebarkan 3 mm", m_dress_waist),
-    ("W3", "dress", "Pinggul rok dress dilebarkan 5 mm", m_dress_hip),
-    ("S2b", "dress", "Sudut hem rok belakang diturunkan 6 mm", m_dress_skirt_side),
-    ("S2a", "dress", "Sudut pinggang depan dress diturunkan 10 mm", m_dress_bodice_side),
+    ("G1", "blouse", "Facing end moved 7 mm", m_closure),
+    ("G2", "blouse", "Parameter changed without a redraft", m_params),
+    ("S1", "blouse", "Back shoulder shortened 2 mm", m_shoulder),
+    ("S2a", "blouse", "Front underarm lowered 8 mm", m_side_above),
+    ("S2b", "blouse", "Back hem corner widened 35 mm", m_side_below),
+    ("S3", "blouse", "Both armholes widened", m_cap_ease),
+    ("S4", "blouse", "Facing neck bowed outward", m_facing),
+    ("S5", "blouse", "One sleeve hem corner lowered 5 mm", m_underarm),
+    ("S6", "tshirt", "Neckband shortened 5 mm", m_neckband),
+    ("W1", "blouse", "Both dart ends narrowed 5 mm", m_bust_join),
+    ("W2", "blouse", "Front waist widened 5 mm", m_waist),
+    ("W3", "blouse", "Front hip widened 5 mm", m_hip),
+    ("D1", "blouse", "Dart tip lifted 15 mm", m_legs),
+    ("D2", "blouse", "Dart tip moved 5 mm inward", m_tip),
+    ("D3", "blouse", "Dart base widened 3 mm", m_intake),
+    ("D4", "blouse", "Dart tip pushed 120 mm", m_kink),
+    ("D5", "blouse", "One back drill mark removed", m_drills),
+    ("N1", "blouse", "One notch moved off its edge", m_notch),
+    ("N2", "blouse", "Front zero notch removed", m_shoulder_notch),
+    ("R1", "blouse", "Grainline tilted", m_grainline),
+    ("S2", "shirt", "Shirt back hem corner lowered 6 mm", m_shirt_side),
+    ("S7", "shirt", "Cuff lengthened 4 mm", m_cuff),
+    ("S8", "shirt", "Collar neck end pulled 6 mm", m_collar),
+    ("W1", "shirt", "Shirt back underarm widened 5 mm", m_shirt_chest),
+    ("W3", "shirt", "Shirt hem narrowed 80 mm per side", m_shirt_hem),
+    ("K1", "skirt", "Skirt dart tip moved 10 mm", m_skirt_dart),
+    ("K2", "skirt", "Waist facing shortened 5 mm", m_waist_finish),
+    ("K3", "skirt", "One hem facing scallop bowed 10 mm", m_hem_facing),
+    ("W2", "skirt", "Skirt waist widened 3 mm (facing follows)", m_skirt_waist),
+    ("W3", "skirt", "Skirt hip widened 5 mm", m_skirt_hip),
+    ("S7", "bishop", "Elastic cuff lengthened 4 mm", m_bishop_cuff),
+    ("S9", "bishop", "Bishop sleeve hem widened 100 mm per side", m_bishop_gathers),
+    ("K4", "dress", "Dress skirt waist widened 3 mm", m_dress_waist_seam),
+    ("D6", "dress", "Front waist dart tip moved 10 mm", m_dress_front_dart),
+    ("D5", "dress", "Dress back dart tip moved 20 mm", m_dress_back_dart),
+    ("K1", "dress", "Dress skirt dart tip moved 10 mm", m_dress_skirt_dart),
+    ("W2", "dress", "Front bodice + skirt waist widened 3 mm", m_dress_waist),
+    ("W3", "dress", "Dress skirt hip widened 5 mm", m_dress_hip),
+    ("S2b", "dress", "Back skirt hem corner lowered 6 mm", m_dress_skirt_side),
+    ("S2a", "dress", "Dress front waist corner lowered 10 mm", m_dress_bodice_side),
+    ("S10", "vest", "Armhole bias shortened 5 mm", m_armhole_bias),
+    ("S11", "vest", "Neck bias lengthened 5 mm", m_neck_bias),
+    ("S3", "blouse", "Blouse sleeve panel removed", m_lost_sleeve),
 ]
 
 BASES: dict[str, Callable[[], Pattern]] = {"blouse": _blouse, "tshirt": _tshirt, "shirt": _shirt, "skirt": _skirt,
-                                           "dress": _dress, "bishop": _bishop}
+                                           "dress": _dress, "bishop": _bishop,
+                                           "vest": _vest}
 
 
 def run_mutation_report() -> list[tuple[str, str, set[str]]]:

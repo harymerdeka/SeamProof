@@ -14,7 +14,7 @@ from seamproof.draft.bodice import close_dart, draft_bodice
 from seamproof.draft.tunic import draft_tunic
 from seamproof.fabric import FABRIC_EASE
 from seamproof.measurements import WOMEN_SIZE_TABLE, WomenMeasurements
-from seamproof.params import GARMENT_PARAMS, PARAMETERS
+from seamproof.params import DARTED_STYLE, GARMENT_PARAMS, PARAMETERS
 from seamproof.pattern import Pattern, Point, edge_length, panel_polygon
 
 BLOUSE = {"garment": "blouse", "draft": draft_blouse}
@@ -188,6 +188,8 @@ def test_parameter_geometry_locality(garment_name: str, name: str, bound: str) -
     """Each applicable parameter moves only its declared panel edges."""
     if name not in GARMENT_PARAMS[garment_name]:
         pytest.skip("Parameter does not apply to this garment")
+    if name in DARTED_STYLE:
+        pytest.skip("Style switch: never tuned alone, covered by tests/test_top_styles.py")
     from seamproof.draft import REGISTRY
 
     draft = REGISTRY[garment_name]

@@ -86,7 +86,7 @@ def test_sample_reading_maps_to_shirt_and_skirt() -> None:
     assert shirt.params["collar_style"] == 2 and shirt.params["pocket_count"] == 2
     assert shirt.params["cuff_depth"] > 0 and shirt.params["shoulder_drop"] > 0
     assert skirt.params["scallop_depth"] > 0 and skirt.params["waistband_height"] == 0
-    assert any("kontras" in note for note in shirt.notes)
+    assert any("Contrast" in note for note in shirt.notes)
 
 
 def test_unsupported_pieces_are_reported() -> None:
@@ -111,7 +111,7 @@ def test_style_switches_add_and_remove_panels() -> None:
     m = WOMEN_SIZE_TABLE["M"]
     names = lambda p: {panel.name for panel in p.panels}  # noqa: E731
     assert names(REGISTRY["shirt"](m, "woven", SHIRT_STYLE)) == {"front", "back", "sleeve", "collar", "cuff", "pocket"}
-    assert names(REGISTRY["shirt"](m, "woven", {"collar_style": 0})) == {"front", "back", "sleeve"}
+    assert names(REGISTRY["shirt"](m, "woven", {"collar_style": 0})) == {"front", "back", "sleeve", "neck_bias"}
     assert names(REGISTRY["skirt"](m, "woven", SKIRT_STYLE)) == {"front", "back", "waist_facing", "hem_facing"}
     assert names(REGISTRY["skirt"](m, "woven", {})) == {"front", "back", "waistband"}
     with pytest.raises(ValueError):
@@ -194,6 +194,40 @@ def test_pack_with_style_drafts_the_photo_garment() -> None:
     assert pack["style"]["params"]["collar_style"] == 2
     mismatch = client.post("/api/pack", json={"garment": "skirt", "mode": "size", "size": "M", "style": piece})
     assert mismatch.status_code == 422
+
+
+@pytest.mark.parametrize("sleeve_length", [None, "unknown", "short", "long", "sleeveless"])
+def test_shirt_pack_only_omits_sleeves_when_explicit(sleeve_length: str | None) -> None:
+    """Missing/unknown length keeps sleeves in the design, JSON, SVG and PDF."""
+    import xml.etree.ElementTree as ET
+
+    features = {"collar": "shirt_collar", "opening": "button_front"}
+    if sleeve_length is not None:
+        features["sleeve_length"] = sleeve_length
+    style = {"part": "top", "kind": "shirt", "features": features}
+    plan = client.post("/api/style-plan", json=style).json()
+    expected = sleeve_length if sleeve_length in ("long", "sleeveless") else "short"
+    assert plan["features"]["sleeve_length"] == expected
+    assert plan["plan"]["drafted"]["sleeve_length"] == expected
+    assert bool(plan["plan"]["preview3d"]["tubes"]) == (expected != "sleeveless")
+
+    response = client.post("/api/pack", json={"garment": "shirt", "fabric": "woven",
+                                               "mode": "size", "size": "M", "style": style})
+    assert response.status_code == 200
+    pack = response.json()
+    assert pack["passed"] and pack["files"]["pdf"]
+    pattern = client.get(pack["files"]["json"]).json()
+    panels = {panel["name"]: panel for panel in pattern["panels"]}
+    svg = ET.fromstring(client.get(pack["files"]["svg"]).content)
+    ids = {element.get("id") for element in svg.iter()}
+    pdf = client.get(pack["files"]["pdf"]).content
+    if expected == "sleeveless":
+        assert "sleeve" not in panels and "sleeve" not in ids
+        assert b"sleeve " not in pdf and "armhole_bias" in panels
+    else:
+        assert panels["sleeve"]["cut_count"] == 2
+        assert {"sleeve", "sleeve.cap", "sleeve.cut"} <= ids
+        assert b"sleeve " in pdf
 
 
 def test_style_plan_endpoint_remaps_edits() -> None:

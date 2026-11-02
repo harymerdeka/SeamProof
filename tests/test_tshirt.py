@@ -125,7 +125,7 @@ def test_reject_invalid_params(params: dict) -> None:
 
 def test_parameter_specs_and_fabric_ranges() -> None:
     """Specs with valid bounds; defaults sit inside fabric ease ranges."""
-    assert len(PARAMETERS) == 36  # 16 block + 12 shirt + 6 skirt + 2 dress style params
+    assert len(PARAMETERS) == 39  # 16 block + 12 shirt + 6 skirt + 2 dress + 1 blouse + 2 finish style params
     assert resolve_params() == {name: spec.default for name, spec in PARAMETERS.items()}
     for spec in PARAMETERS.values():
         assert spec.min <= spec.default <= spec.max

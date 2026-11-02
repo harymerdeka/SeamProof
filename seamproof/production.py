@@ -48,11 +48,11 @@ class ProductionReport:
     overall_utilisation: float = 0.0
 
     def summary_id(self) -> str:
-        """Return a one-line Indonesian run summary."""
+        """Return a one-line run summary."""
         units = sum(item.qty for item in self.sizes)
-        return (f"Paket produksi {self.garment}: {units} potong, "
-                f"{self.total_metres:.2f} m kain, Rp{self.total_cost:,.0f}, "
-                f"utilisasi {self.overall_utilisation * 100:.1f}%.")
+        return (f"Production pack {self.garment}: {units} units, "
+                f"{self.total_metres:.2f} m of fabric, Rp{self.total_cost:,.0f}, "
+                f"utilisation {self.overall_utilisation * 100:.1f}%.")
 
 
 def _table(garment: str):
@@ -69,13 +69,13 @@ def _parse_run(spec: str, table) -> dict[str, int]:
         size, qty = part.split("=", 1)
         size, qty = size.strip(), qty.strip()
         if size not in table:
-            raise ValueError(f"Ukuran tak dikenal: {size}.")
+            raise ValueError(f"Unknown size: {size}.")
         try:
             count = int(qty)
         except ValueError:
-            raise ValueError(f"Jumlah {size} harus bilangan bulat: '{qty}'.") from None
+            raise ValueError(f"Quantity for {size} must be a whole number: '{qty}'.") from None
         if count <= 0:
-            raise ValueError(f"Jumlah {size} harus positif.")
+            raise ValueError(f"Quantity for {size} must be positive.")
         run[size] = count
     if not run:
         raise ValueError("Jatah kosong.")
@@ -94,11 +94,11 @@ def produce(garment: str, run_spec: str, fabric: str, fabric_width_mm: float,
     if fabric not in FABRIC_EASE:
         raise ValueError(f"Unknown fabric category: {fabric}")
     if not fabric_width_mm > 0:
-        raise ValueError("Lebar kain harus positif.")
+        raise ValueError("Fabric width must be positive.")
     if not price_per_m >= 0:
-        raise ValueError("Harga per meter tidak boleh negatif.")
+        raise ValueError("Price per metre must not be negative.")
     if layers < 1:
-        raise ValueError("Lapisan minimal 1.")
+        raise ValueError("Layers must be at least 1.")
     table = _table(garment)
     run = _parse_run(run_spec, table)
     draft = REGISTRY[garment]
@@ -124,20 +124,20 @@ def produce(garment: str, run_spec: str, fabric: str, fabric_width_mm: float,
 
 def production_md(report: ProductionReport) -> str:
     """Render the cut list, markers and totals as Markdown."""
-    lines = [f"# Paket Produksi — {report.garment} ({report.fabric})", "",
-             f"- Lebar kain: {report.fabric_width_mm:.0f} mm",
-             f"- Harga: Rp{report.price_per_m:,.0f}/m — Lapisan: {report.layers}",
+    lines = [f"# Production Pack — {report.garment} ({report.fabric})", "",
+             f"- Fabric width: {report.fabric_width_mm:.0f} mm",
+             f"- Price: Rp{report.price_per_m:,.0f}/m — Layers: {report.layers}",
              f"- Total: {report.total_metres:.2f} m — Rp{report.total_cost:,.0f}",
-             f"- Utilisasi: {report.overall_utilisation * 100:.1f}% (terukur, bukan target)",
+             f"- Utilisation: {report.overall_utilisation * 100:.1f}% (measured, not a target)",
              "",
-             "| Ukuran | Jatah | Terverifikasi | Panjang (mm) | Meter | Utilisasi |",
+             "| Size | Quantity | Verified | Length (mm) | Metres | Utilisation |",
              "|--------|-------|---------------|---------------|-------|-----------|"]
     for item in report.sizes:
         lines.append(f"| {item.size} | {item.qty} | "
-                     f"{'LULUS' if item.verified else 'GAGAL'} | "
+                     f"{'PASS' if item.verified else 'FAIL'} | "
                      f"{item.marker.used_length_mm:.0f} | {item.metres:.2f} | "
                      f"{item.marker.utilisation * 100:.1f}% |")
-    lines += ["", "| Potong (ukuran panel) | Jumlah |",
+    lines += ["", "| Cut (size panel) | Count |",
               "|--------|--------|"]
     for key in sorted(report.cut_list):
         lines.append(f"| {key} | {report.cut_list[key]} |")

@@ -14,6 +14,7 @@ production use. No seam allowances are included here.
 import math
 from typing import Mapping
 
+from seamproof.draft.finish import v_line
 from seamproof.fabric import FABRIC_EASE
 from seamproof.measurements import WOMEN_SIZE_TABLE, WomenMeasurements
 from seamproof.params import resolve_params
@@ -21,6 +22,10 @@ from seamproof.pattern import Curve, Edge, Notch, Panel, Pattern, Point, edge_le
 
 BACK_NECK_DROP = 20.0
 FACING_WIDTH = 40.0
+# Back truing stops once the back half is this close to a quarter bust (a
+# higher sleeveless armhole converges slower than the sleeved block).
+TRUE_PASSES = 8
+TRUE_GAP_MM = 0.05
 SLEEVE_BICEP_EASE = 60.0
 SLEEVE_WRIST_EASE = 20.0
 BACK_DART_LENGTH = 140.0
@@ -104,9 +109,10 @@ def _torso_front(
     corner = Point(hem_half, hem_y)
     if not corner.y >= hip.y or not corner.x >= hip.x:
         raise ValueError("Hem must fall at or below the hip, at or outside its width")
-    neckline = Edge("front.neckline", Curve.from_cubic_bezier(
-        neck, Point(snp.x * 0.55, neck.y), Point(snp.x, neck.y * 0.55), snp,
-    ), "facing.neck" if facing else None)
+    # neck_v: straight V to centre front.
+    neck_curve = (v_line(neck, snp) if p["neck_v"] >= 0.5 else
+                  Curve.from_cubic_bezier(neck, Point(snp.x * 0.55, neck.y), Point(snp.x, neck.y * 0.55), snp))
+    neckline = Edge("front.neckline", neck_curve, "facing.neck" if facing else None)
     armhole = Edge("front.armhole", Curve.from_cubic_bezier(
         shoulder,
         Point(shoulder.x - p["armhole_curve_depth"], shoulder.y + (depth - shoulder.y) * 0.55),
@@ -278,6 +284,13 @@ def _facing(front: Panel) -> Panel:
         hypo = math.hypot(tx, ty) or 1.0
         # Outward is up-left of the neckline direction (y grows downward).
         outer.append(Point(point.x + ty / hypo * FACING_WIDTH, point.y - tx / hypo * FACING_WIDTH))
+    # A V neck's offset crosses centre front: clip the outer edge back onto the CF line.
+    while len(outer) > 2 and outer[1].x <= 0 < -outer[0].x - 1e-6:
+        outer.pop(0)
+    if outer[0].x < -1e-6:
+        a, b = outer[0], outer[1]
+        t = -a.x / (b.x - a.x)
+        outer[0] = Point(0.0, a.y + (b.y - a.y) * t)
     neck_edge = Edge("facing.neck", Curve(tuple(samples)), "front.neckline")
     shoulder_end = Edge("facing.end_shoulder", Curve((samples[-1], outer[-1])))
     outer_edge = Edge("facing.outer", Curve(tuple(reversed(outer))))
@@ -350,8 +363,8 @@ def _assemble(
 ) -> Pattern:
     """Draft front, back and sleeve over a shared torso and record metadata.
 
-    The back bust width is trued in the sewn state: three fixed passes widen
-    the back underarm until the back half measures a quarter of the eased
+    The back bust width is trued in the sewn state: up to TRUE_PASSES passes
+    widen the back underarm until the back half measures a quarter of the eased
     bust. The front needs no pass: its dart base sits vertically on the bust
     joint, so the sewn side join lands on the quarter bust by construction.
     """
@@ -364,10 +377,13 @@ def _assemble(
     line = LineString([(-1000, m.apex_height), (1000, m.apex_height)])
     front, dart = _torso_front(m, ease, p, hem_y, hem_half, slit_mm, hem_curve, facing_piece)
     extra_b = 0.0
-    for _ in range(3):
+    for _ in range(TRUE_PASSES):
         back, back_info = _torso_back(m, ease, p, hem_y, hem_half, slit_mm, hem_curve,
                                       opening, extra_b)
-        extra_b += quarter - panel_polygon(back).intersection(line).length
+        gap = quarter - panel_polygon(back).intersection(line).length
+        if abs(gap) <= TRUE_GAP_MM:
+            break
+        extra_b += gap
     front_join = (dart["upper"].x + dart["lower"].x) / 2
     back_half = panel_polygon(back).intersection(line).length
     sleeve, cap_ease = _sleeve(m, p, dart["armhole_length"] + back_info["armhole_length"])

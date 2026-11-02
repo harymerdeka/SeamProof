@@ -8,6 +8,7 @@ slits open the side seam slit_height above the hem with a notch at each top.
 from typing import Literal, Mapping
 
 from seamproof.draft.bodice import _assemble
+from seamproof.draft.styled import finish_arms, styled_block
 from seamproof.fabric import FABRIC_EASE
 from seamproof.measurements import WomenMeasurements
 from seamproof.params import resolve_params
@@ -28,9 +29,10 @@ def draft_tunic(
         raise ValueError("Back opening must be none or centre_back_zip")
     p = resolve_params(params)
     hip_half = (m.hip + FABRIC_EASE[fabric].default_ease_mm) / 4
-    pattern, _ = _assemble("tunic", m, fabric, p, m.front_length + p["tunic_length"],
+    pattern, _ = _assemble("tunic", styled_block(m, p), fabric, p, m.front_length + p["tunic_length"],
                            hip_half + p["side_flare"], p["slit_height"], p["hem_curve"],
                            True, back_opening)
+    finish_arms(pattern, m, p)
     pattern.metadata["back_opening"] = back_opening
     pattern.metadata["assumptions"] += " Tunic hem from front waist; centre dips hem_curve."
     return pattern

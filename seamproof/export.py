@@ -112,13 +112,13 @@ def draw_panel_page(canvas: Canvas, panel: Panel, pattern: Pattern,
         tick = rx + mm_to_pt(i * 10)
         canvas.line(tick, ry, tick, ry - (6 if i % 5 == 0 else 3))
     canvas.setFont("Helvetica", 9)
-    canvas.drawString(rx, ry + 4, f"{RULER_MM:.0f} mm (skala 1:1)")
+    canvas.drawString(rx, ry + 4, f"{RULER_MM:.0f} mm (scale 1:1)")
     # Labels.
     canvas.setFont("Helvetica-Bold", 12)
     canvas.drawString(rx, ry + 20, f"{panel.name} — {pattern.garment_type} {pattern.size_label}")
     canvas.setFont("Helvetica", 9)
-    potong = f"potong {panel.cut_count}x" + (" (lipatan)" if panel.cut_on_fold else "")
-    canvas.drawString(rx, ry + 32, f"{pattern.fabric} — {potong}")
+    cut_text = f"cut {panel.cut_count}x" + (" (on fold)" if panel.cut_on_fold else "")
+    canvas.drawString(rx, ry + 32, f"{pattern.fabric} — {cut_text}")
     canvas.drawString(rx, ry + 44, f"SeamProof {__version__} — {pattern.metadata.get('params_hash', '')[:8]}")
     canvas.showPage()
 
@@ -129,16 +129,16 @@ def draw_cover_page(canvas: Canvas, pattern: Pattern) -> None:
     canvas.setFont("Helvetica-Bold", 18)
     canvas.drawString(50, 780, f"SeamProof — {pattern.garment_type} {pattern.size_label}")
     canvas.setFont("Helvetica", 12)
-    canvas.drawString(50, 755, f"Kain: {pattern.fabric} — tanggal: {date.today().isoformat()}")
+    canvas.drawString(50, 755, f"Fabric: {pattern.fabric} — date: {date.today().isoformat()}")
     canvas.drawString(50, 735, f"Status: {pattern.metadata.get('status', '')}")
     y = 700
     canvas.setFont("Helvetica-Bold", 12)
-    canvas.drawString(50, y, "Panel (cetak halaman berikut pada 100%, periksa penggaris 100 mm):")
+    canvas.drawString(50, y, "Panels (print the next pages at 100%, check the 100 mm ruler):")
     canvas.setFont("Helvetica", 12)
     for panel in pattern.panels:
         y -= 20
-        potong = f"potong {panel.cut_count}x" + (" (lipatan)" if panel.cut_on_fold else "")
-        canvas.drawString(70, y, f"{panel.name}: {len(panel.edges)} tepi — {potong}")
+        cut_text = f"cut {panel.cut_count}x" + (" (on fold)" if panel.cut_on_fold else "")
+        canvas.drawString(70, y, f"{panel.name}: {len(panel.edges)} edges — {cut_text}")
     canvas.showPage()
 
 
@@ -170,8 +170,8 @@ TILE_USABLE_H_MM = 297.0 - 2 * TILE_MARGIN_MM
 TILE_STEP_X_MM = TILE_USABLE_W_MM - TILE_OVERLAP_MM
 TILE_STEP_Y_MM = TILE_USABLE_H_MM - TILE_OVERLAP_MM
 A4_PT = (MM_TO_PT * 210.0, MM_TO_PT * 297.0)
-NOT_VERIFIED = "NOT VERIFIED / BELUM TERVERIFIKASI"
-TEST_SQUARE_LABEL = "Ukur: harus 10 cm / Measure: must be 10 cm"
+NOT_VERIFIED = "NOT VERIFIED"
+TEST_SQUARE_LABEL = "Measure: must be 10 cm"
 
 
 def tile_grid(min_x: float, min_y: float, max_x: float, max_y: float,
@@ -245,24 +245,24 @@ def draw_proof_page(canvas: Canvas, pattern: Pattern, report, explanation=None) 
     canvas.drawString(50, 800, f"SeamProof — {pattern.garment_type} {pattern.size_label}")
     canvas.setFont("Helvetica", 11)
     meta = report.meta
-    canvas.drawString(50, 778, f"Kain: {pattern.fabric} — versi: {meta.get('version', '')}")
-    canvas.drawString(50, 762, f"Hash parameter: {meta.get('params_hash', '')[:16]}…")
+    canvas.drawString(50, 778, f"Fabric: {pattern.fabric} — version: {meta.get('version', '')}")
+    canvas.drawString(50, 762, f"Parameter hash: {meta.get('params_hash', '')[:16]}…")
     seam = pattern.metadata.get("seam_allowance_mm") or {}
-    seam_text = (f" — kampuh {seam.get('default', 0):g} mm, kelim {seam.get('hem', 0):g} mm, lipatan 0"
-                 if seam else " — TANPA kampuh")
-    canvas.drawString(50, 746, f"Putaran perbaikan: {meta.get('repair_rounds', 0)}{seam_text}")
+    seam_text = (f" — seam allowance {seam.get('default', 0):g} mm, hem {seam.get('hem', 0):g} mm, fold 0"
+                 if seam else " — NO seam allowance")
+    canvas.drawString(50, 746, f"Repair rounds: {meta.get('repair_rounds', 0)}{seam_text}")
     canvas.setFont("Helvetica-Bold", 14)
-    canvas.drawString(50, 722, "LULUS — siap toile." if report.passed else "GAGAL — perbaiki dulu.")
+    canvas.drawString(50, 722, "PASS — ready for toile." if report.passed else "FAIL — fix it first.")
     signoff = meta.get("signoff")
     canvas.setFont("Helvetica", 10)
-    canvas.drawString(300, 722, f"Dicek pembuat pola: {signoff['name']} ({signoff['at'][:10]})"
-                      if signoff else "Belum dicek pembuat pola.")
+    canvas.drawString(300, 722, f"Checked by pattern maker: {signoff['name']} ({signoff['at'][:10]})"
+                      if signoff else "Not yet checked by a pattern maker.")
     canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawString(50, 700, "ID  Pemeriksaan            Nilai    Harapan  Batas  Hasil")
+    canvas.drawString(50, 700, "ID  Check                  Value   Expected  Limit  Result")
     canvas.setFont("Helvetica", 9)
     y = 686
     for check in report.checks:
-        result = "LULUS" if check.passed else "GAGAL"
+        result = "PASS" if check.passed else "FAIL"
         canvas.drawString(50, y, f"{check.id:<4}{check.name_id[:22]:<23}{_fmt(check.actual):>7} "
                                 f"{_fmt(check.expected):>8} {_fmt(check.tolerance):>6}  {result}")
         y -= 13
@@ -270,14 +270,14 @@ def draw_proof_page(canvas: Canvas, pattern: Pattern, report, explanation=None) 
         _summary, instructions = explanation
         y -= 6
         canvas.setFont("Helvetica-Bold", 10)
-        canvas.drawString(50, y, "Penjelasan penjahit (detail di report.md):")
+        canvas.drawString(50, y, "Tailor explanation (details in report.md):")
         canvas.setFont("Helvetica", 9)
         for item in instructions[:4]:
             y -= 13
             canvas.drawString(60, y, f"- {item.text[:95]}")
         if len(instructions) > 4:
             y -= 13
-            canvas.drawString(60, y, f"+{len(instructions) - 4} instruksi lagi, lihat report.md.")
+            canvas.drawString(60, y, f"+{len(instructions) - 4} more instructions, see report.md.")
             y -= 13
     draw_test_square(canvas, 50, y - 130)
     canvas.showPage()
@@ -340,8 +340,8 @@ def draw_tile_page(canvas: Canvas, panel: Panel, pattern: Pattern, col: int, row
         canvas.line(cx, cy - 6, cx, cy + 6)
     canvas.setFont("Helvetica", 9)
     canvas.drawString(x0, y1 + 4, f"{panel.name} — R{row + 1}C{col + 1}")
-    potong = f"potong {panel.cut_count}x" + (" (lipatan)" if panel.cut_on_fold else "")
-    canvas.drawString(x0, y0 - 12, f"{pattern.garment_type} {pattern.size_label} — {potong}")
+    cut_text = f"cut {panel.cut_count}x" + (" (on fold)" if panel.cut_on_fold else "")
+    canvas.drawString(x0, y0 - 12, f"{pattern.garment_type} {pattern.size_label} — {cut_text}")
     canvas.showPage()
 
 
@@ -373,7 +373,7 @@ def export_pdf_tiled(pattern: Pattern, report, path: str | BinaryIO, force: bool
     Refuses failing reports unless forced; forced pages carry NOT VERIFIED.
     """
     if not report.passed and not force:
-        raise ValueError("Pola tidak lulus verifikasi — PDF ditolak. Gunakan --force untuk mencetak dengan cap NOT VERIFIED.")
+        raise ValueError("The pattern failed verification — PDF refused. Use --force to print with a NOT VERIFIED stamp.")
     pattern = ensure_allowance(pattern)
     canvas = Canvas(path, pagesize=A4_PT, pageCompression=0)
     canvas.setTitle(f"SeamProof {pattern.garment_type} {pattern.size_label}")
@@ -426,7 +426,7 @@ def export_svg(pattern: Pattern, path: str | BinaryIO) -> None:
                 lines.append(f'<rect x="{spot.x - min_x + offset - 1:.1f}" y="{spot.y - min_y - 1:.1f}" '
                              f'width="2" height="2" fill="none" stroke="red" stroke-width="0.5" class="notch"/>')
         lines.append(f'<text x="{offset:.1f}" y="{total_h - 2:.1f}" font-size="5" class="label">{panel.name} '
-                     f'(potong {panel.cut_count}x{" lipatan" if panel.cut_on_fold else ""})</text>')
+                     f'(cut {panel.cut_count}x{" on fold" if panel.cut_on_fold else ""})</text>')
         lines.append("</g>")
         offset += width + gap
     lines.append("</svg>")
@@ -473,7 +473,7 @@ def export_dxf(pattern: Pattern, report, path: str | BinaryIO, force: bool = Fal
     import ezdxf
 
     if not report.passed and not force:
-        raise ValueError("Pola tidak lulus verifikasi — DXF ditolak.")
+        raise ValueError("The pattern failed verification — DXF refused.")
     pattern = ensure_allowance(pattern)
     doc = ezdxf.new("R2010", setup=False)
     doc.header["$INSUNITS"] = 4
@@ -502,8 +502,8 @@ def export_dxf(pattern: Pattern, report, path: str | BinaryIO, force: bool = Fal
             nx, ny = _outward_normal(panel, edge.curve, spot)
             tip = Point(spot.x + nx * DXF_NOTCH_MM, spot.y + ny * DXF_NOTCH_MM)
             msp.add_line(place(spot), place(tip), dxfattribs={"layer": "NOTCH"})
-        label = (f"{pattern.garment_type} {pattern.size_label} {panel.name} potong {panel.cut_count}x"
-                 + (" LIPAT" if panel.cut_on_fold else ""))
+        label = (f"{pattern.garment_type} {pattern.size_label} {panel.name} cut {panel.cut_count}x"
+                 + (" FOLD" if panel.cut_on_fold else ""))
         msp.add_text(label, height=6, dxfattribs={"layer": "TEXT"}).set_placement(
             (offset, -(max_y - min_y) - 12))
         offset += (max_x - min_x) + gap
@@ -527,28 +527,28 @@ def draw_production_summary(canvas: Canvas, report) -> None:
     """Draw the production totals, cut list and per-size table on A4."""
     canvas.setPageSize(A4_PT)
     canvas.setFont("Helvetica-Bold", 18)
-    canvas.drawString(50, 800, f"Ringkasan produksi — {report.garment} ({report.fabric})")
+    canvas.drawString(50, 800, f"Production summary — {report.garment} ({report.fabric})")
     canvas.setFont("Helvetica", 11)
-    facts = [f"Lebar kain: {report.fabric_width_mm:.0f} mm — Lapisan: {report.layers}",
-             f"Harga: Rp{report.price_per_m:,.0f}/m",
+    facts = [f"Fabric width: {report.fabric_width_mm:.0f} mm — Layers: {report.layers}",
+             f"Price: Rp{report.price_per_m:,.0f}/m",
              f"Total: {report.total_metres:.2f} m — Rp{report.total_cost:,.0f}",
-             f"Utilisasi: {report.overall_utilisation * 100:.1f}% (terukur, bukan target)"]
+             f"Utilisation: {report.overall_utilisation * 100:.1f}% (measured, not a target)"]
     y = 776
     for fact in facts:
         canvas.drawString(50, y, fact)
         y -= 16
     y -= 8
     canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawString(50, y, "Ukuran  Jatah  Verifikasi  Panjang  Meter  Utilisasi")
+    canvas.drawString(50, y, "Size   Qty    Verified    Length   Metres Utilisation")
     canvas.setFont("Helvetica", 9)
     for item in report.sizes:
         y -= 13
-        canvas.drawString(50, y, f"{item.size:<7}{item.qty:<7}{'LULUS' if item.verified else 'GAGAL':<12}"
+        canvas.drawString(50, y, f"{item.size:<7}{item.qty:<7}{'PASS' if item.verified else 'FAIL':<12}"
                                 f"{item.marker.used_length_mm:<9.0f}{item.metres:<7.2f}"
                                 f"{item.marker.utilisation * 100:.1f}%")
     y -= 19
     canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawString(50, y, "Cut list (ukuran panel: jumlah)")
+    canvas.drawString(50, y, "Cut list (size panel: count)")
     canvas.setFont("Helvetica", 9)
     for key in sorted(report.cut_list):
         y -= 13
@@ -580,9 +580,9 @@ def _piece_caption(place, size: str) -> tuple[str, str]:
     if place.copies > 1:
         extra.append(f"{place.copy}/{place.copies}")
     if place.mirrored:
-        extra.append("cermin")
+        extra.append("mirrored")
     if place.opened_fold:
-        extra.append("buka lipatan")
+        extra.append("fold opened")
     return place.panel, " · ".join([size] + extra) if size else " · ".join(extra)
 
 
@@ -598,8 +598,8 @@ def export_marker_svg(marker, title: str, path: str | BinaryIO, size: str = "") 
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{length + 40:.0f}mm" height="{width + 70:.0f}mm" '
              f'viewBox="-20 -50 {length + 40:.1f} {width + 70:.1f}" font-family="Helvetica, Arial, sans-serif">',
              f'<text x="0" y="-30" font-size="14" font-weight="bold" class="mk-title">{escape(title)}</text>',
-             f'<text x="0" y="-12" font-size="10" class="mk-sub">lebar {width:.0f} mm · panjang {length:.0f} mm · '
-             f'utilisasi {marker.utilisation * 100:.1f}% · arah panjang kain →</text>',
+             f'<text x="0" y="-12" font-size="10" class="mk-sub">width {width:.0f} mm · length {length:.0f} mm · '
+             f'utilisation {marker.utilisation * 100:.1f}% · fabric length direction →</text>',
              f'<rect x="0" y="0" width="{length:.1f}" height="{width:.1f}" fill="#fff" stroke="black" '
              f'stroke-width="1" class="mk-fabric"/>']
     for tick in range(0, int(length) + 1, 100):
@@ -608,7 +608,7 @@ def export_marker_svg(marker, title: str, path: str | BinaryIO, size: str = "") 
                      f'stroke-width="0.5" class="mk-tick"/>')
         if big and tick:
             lines.append(f'<text x="{tick + 2}" y="20" font-size="9" class="mk-tick-l">{tick / 1000:.1f} m</text>')
-    lines.append(f'<text x="4" y="{width - 4:.1f}" font-size="8" class="mk-sel">TEPI KAIN</text>')
+    lines.append(f'<text x="4" y="{width - 4:.1f}" font-size="8" class="mk-sel">FABRIC EDGE</text>')
     for place in marker.placements:
         name, sub = _piece_caption(place, size)
         lines.append(f'<g data-name="{escape(name + " · " + sub, {chr(34): "&quot;"})}" class="mk-piece">')
@@ -668,7 +668,7 @@ def _draw_marker(canvas: Canvas, marker, size: str, to_pt, scale: float,
         canvas.line(*to_pt(tick, 0), *to_pt(tick, 12 if big else 6))
         if big and tick:
             canvas.drawString(*to_pt(tick + 2, 22), f"{tick / 1000:.1f} m")
-    canvas.drawString(*to_pt(4, width - 4), "TEPI KAIN")
+    canvas.drawString(*to_pt(4, width - 4), "FABRIC EDGE")
     for place in marker.placements:
         if window is not None:
             shown = [_marker_view(marker, x, y) for x, y in place.cut]
@@ -717,12 +717,12 @@ def _marker_header(canvas: Canvas, marker, title: str, x_pt: float, y_pt: float,
     canvas.setFont("Helvetica-Bold", 14 * k)
     canvas.drawString(x_pt, y_pt, title)
     canvas.setFont("Helvetica", 9 * k)
-    scale = ("SKALA 1:1 — cetak 100% / Actual size, jangan 'Fit'. Ukur kotak uji 10 cm sebelum memotong."
-             if one_to_one else "Gambar diperkecil — bukan untuk dijiplak. Pakai PDF plotter atau A4 1:1.")
-    canvas.drawString(x_pt, y_pt - 13 * k, f"Lebar kain {marker.fabric_width_mm:.0f} mm · panjang marker "
-                                          f"{marker.used_length_mm:.0f} mm · utilisasi {marker.utilisation * 100:.1f}% · "
-                                          f"{len(marker.placements)} potongan"
-                                          + (" · arah panjang kain →" if arrow else ""))
+    scale = ("SCALE 1:1 — print at 100% / Actual size, not 'Fit'. Measure the 10 cm test square before cutting."
+             if one_to_one else "Reduced drawing — not for tracing. Use the plotter or A4 1:1 PDF.")
+    canvas.drawString(x_pt, y_pt - 13 * k, f"Fabric width {marker.fabric_width_mm:.0f} mm · marker length "
+                                          f"{marker.used_length_mm:.0f} mm · utilisation {marker.utilisation * 100:.1f}% · "
+                                          f"{len(marker.placements)} pieces"
+                                          + (" · fabric length direction →" if arrow else ""))
     canvas.drawString(x_pt, y_pt - 25 * k, scale)
 
 
@@ -750,7 +750,7 @@ def _windows(total: float, window: float, overlap: float) -> list[float]:
 def _check_marker_print(verified: bool, force: bool) -> None:
     """Refuse 1:1 cutting prints of a pattern that failed verification."""
     if not verified and not force:
-        raise ValueError("Pola ukuran ini tidak lulus verifikasi — marker 1:1 ditolak.")
+        raise ValueError("This size failed verification — 1:1 marker refused.")
 
 
 def marker_plot_page_mm(marker) -> list[float]:
@@ -792,9 +792,9 @@ def export_marker_plot_pdf(marker, title: str, path: str | BinaryIO, size: str =
         canvas.clipPath(clip, stroke=0, fill=0)
         _draw_marker(canvas, marker, size, to_pt, MM_TO_PT, label_pt=28.0)
         canvas.restoreState()
-        part = f" — bagian {index + 1}/{len(starts)}" if len(starts) > 1 else ""
+        part = f" — part {index + 1}/{len(starts)}" if len(starts) > 1 else ""
         canvas.setFont("Helvetica", 9)
-        canvas.drawString(left, mm_to_pt(3), f"{title}{part} — skala 1:1")
+        canvas.drawString(left, mm_to_pt(3), f"{title}{part} — scale 1:1")
         for edge in (start, start + span):
             if 0 < edge < length:  # join lines where pages meet
                 x, _ = to_pt(edge, 0)
@@ -867,8 +867,8 @@ def export_marker_tiles_pdf(marker, title: str, path: str | BinaryIO, size: str 
     printed = sum(1 for t in tiles if t[4])
     canvas.setFont("Helvetica", 9)
     canvas.drawString(mm_to_pt(10), A4_PT[1] - mm_to_pt(25) - 14,
-                      f"{printed} lembar A4 (dari {len(tiles)}; lembar kosong dilewati). Tempel berurutan, "
-                      f"tumpang {TILE_OVERLAP_MM:.0f} mm, tanda + bertemu +.")
+                      f"{printed} A4 sheets (of {len(tiles)}; blank sheets skipped). Tape them in order, "
+                      f"overlap {TILE_OVERLAP_MM:.0f} mm, + mark meets +.")
     map_w = 190.0
     s = mm_to_pt(min(map_w / (xs[-1] + usable_w), 120.0 / (ys[-1] + usable_h)))
     left, top = mm_to_pt(10), A4_PT[1] - mm_to_pt(40)
@@ -910,9 +910,9 @@ def export_marker_tiles_pdf(marker, title: str, path: str | BinaryIO, size: str 
             canvas.line(px - 6, py, px + 6, py)
             canvas.line(px, py - 6, px, py + 6)
         canvas.setFont("Helvetica", 9)
-        canvas.drawString(cx0, cy1 + 4, f"{title} R{row + 1}C{col + 1} (baris {row + 1}/{n_rows}, "
-                                        f"kolom {col + 1}/{n_cols})")
-        canvas.drawString(cx0, cy0 - 12, "Skala 1:1 — cetak 100%. Kolom berikut di kanan, baris berikut di bawah.")
+        canvas.drawString(cx0, cy1 + 4, f"{title} R{row + 1}C{col + 1} (row {row + 1}/{n_rows}, "
+                                        f"column {col + 1}/{n_cols})")
+        canvas.drawString(cx0, cy0 - 12, "Scale 1:1 — print at 100%. The next column is to the right, the next row is below.")
         canvas.showPage()
     canvas.save()
 
@@ -934,7 +934,7 @@ def export_fit_overlay_svg(v1: Pattern, v2: Pattern, path: str | BinaryIO) -> No
     total_w = max(max(b[2] - b[0] for b in boxes) for _n, _f, _s, boxes in rows)
     lines = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w:.1f}mm" '
              f'height="{total_h:.1f}mm" viewBox="0 0 {total_w:.1f} {total_h:.1f}">',
-             '<text x="2" y="10" font-size="6">hitam=v1, hijau putus-putus=v2 (mm)</text>']
+             '<text x="2" y="10" font-size="6">black=v1, green dashed=v2 (mm)</text>']
     y_off = 14.0
     for name, first, second, boxes in rows:
         (a0, a1, _a2, _a3), (b0, b1, _b2, _b3) = boxes
@@ -960,7 +960,7 @@ def export_fit_overlay_svg(v1: Pattern, v2: Pattern, path: str | BinaryIO) -> No
 def export_production_pdf(report, path: str | BinaryIO) -> None:
     """Write the production summary plus one denah page per size."""
     canvas = Canvas(path, pagesize=A4_PT, pageCompression=0)
-    canvas.setTitle(f"SeamProof produksi {report.garment}")
+    canvas.setTitle(f"SeamProof production {report.garment}")
     canvas.setAuthor(f"SeamProof {__version__}")
     draw_production_summary(canvas, report)
     for item in report.sizes:
@@ -969,39 +969,39 @@ def export_production_pdf(report, path: str | BinaryIO) -> None:
 
 
 def export_report_md(report, path: str | BinaryIO, explanation=None) -> None:
-    """Write the Indonesian proof report as Markdown, plus tailor instructions."""
+    """Write the proof report as Markdown, plus tailor instructions."""
     meta = report.meta
     lines = [f"# SeamProof Proof Report — {report.garment} {report.size}",
              "",
-             f"- Kain: {report.fabric}",
-             f"- Versi: {meta.get('version', '')}",
-             f"- Hash parameter: `{meta.get('params_hash', '')}`",
-             f"- Putaran perbaikan: {meta.get('repair_rounds', 0)}",
-             (f"- Dicek pembuat pola: {meta['signoff']['name']} ({meta['signoff']['at']})"
+             f"- Fabric: {report.fabric}",
+             f"- Version: {meta.get('version', '')}",
+             f"- Parameter hash: `{meta.get('params_hash', '')}`",
+             f"- Repair rounds: {meta.get('repair_rounds', 0)}",
+             (f"- Checked by pattern maker: {meta['signoff']['name']} ({meta['signoff']['at']})"
               + (f" — {meta['signoff']['note']}" if meta['signoff'].get('note') else "")
-              if meta.get("signoff") else "- Dicek pembuat pola: belum"),
-             f"- Status: **{'LULUS' if report.passed else 'GAGAL'}** "
+              if meta.get("signoff") else "- Checked by pattern maker: not yet"),
+             f"- Status: **{'PASS' if report.passed else 'FAIL'}** "
              f"({sum(c.passed for c in report.checks)}/{len(report.checks)})",
              "",
-             "| ID | Pemeriksaan | Nilai | Harapan | Toleransi | Hasil |",
+             "| ID | Check | Value | Expected | Tolerance | Result |",
              "|----|-------------|-------|---------|-----------|-------|"]
     for check in report.checks:
         lines.append(f"| {check.id} | {check.name_id} | {_fmt(check.actual)} | {_fmt(check.expected)} | "
-                     f"{_fmt(check.tolerance)} | {'LULUS' if check.passed else 'GAGAL'} |")
+                     f"{_fmt(check.tolerance)} | {'PASS' if check.passed else 'FAIL'} |")
     lines += ["", report.summary_id(), ""]
     gathers = meta.get("gathers_mm") or {}
     if gathers:
-        lines += ["## Kerutan (dari pola, dihitung kode)", ""]
+        lines += ["## Gathers (from the pattern, computed by code)", ""]
         if gathers.get("sleeve_hem"):
-            lines.append(f"- Ujung lengan: kerut {gathers['sleeve_hem']:.0f} mm kelebihan ke manset (cocokkan notch tengah).")
+            lines.append(f"- Sleeve hem: gather {gathers['sleeve_hem']:.0f} mm of excess into the cuff (match the centre notch).")
         if gathers.get("sleeve_cap"):
-            lines.append(f"- Puncak lengan: kerut {gathers['sleeve_cap']:.0f} mm di antara notch depan dan belakang puncak.")
+            lines.append(f"- Sleeve cap: gather {gathers['sleeve_cap']:.0f} mm between the front and back cap notches.")
         if gathers.get("elastic_cut"):
-            lines.append(f"- Karet manset: potong {gathers['elastic_cut']:.0f} mm per manset (sebelum disambung).")
+            lines.append(f"- Cuff elastic: cut {gathers['elastic_cut']:.0f} mm per cuff (before joining).")
         lines.append("")
     if explanation is not None:
         summary, instructions = explanation
-        lines += ["## Penjelasan penjahit", "", summary, ""]
+        lines += ["## Tailor explanation", "", summary, ""]
         for item in instructions:
             amount = "—" if item.amount_mm is None else f"{item.amount_mm:.1f} mm"
             lines.append(f"- **{item.panel} / {item.edge}** ({item.action}, {amount}): {item.text}")
@@ -1015,12 +1015,12 @@ def export_report_md(report, path: str | BinaryIO, explanation=None) -> None:
 
 
 # Nested grading PDF: every size overlaid at 1:1, one page per panel name.
-# (color, dash pattern, Indonesian style name) per position in the size list.
+# (color, dash pattern, style name) per position in the size list.
 GRADE_STYLES = [
-    (black, [], "garis penuh hitam"),
-    (HexColor("#1a56db"), [5, 4], "putus-putus biru"),
-    (HexColor("#c81e1e"), [2, 2], "titik-titik merah"),
-    (HexColor("#057a55"), [8, 3], "putus-panjang hijau"),
+    (black, [], "solid black"),
+    (HexColor("#1a56db"), [5, 4], "dashed blue"),
+    (HexColor("#c81e1e"), [2, 2], "dotted red"),
+    (HexColor("#057a55"), [8, 3], "long-dash green"),
 ]
 
 
@@ -1040,41 +1040,41 @@ def draw_graded_proof_page(canvas: Canvas, report, explanations=None) -> None:
     canvas.setFont("Helvetica-Bold", 18)
     canvas.drawString(50, 800, f"SeamProof grading — {report.garment} ({report.fabric})")
     canvas.setFont("Helvetica", 11)
-    canvas.drawString(50, 778, f"Ukuran: {', '.join(report.sizes)} — skala 1:1, periksa kotak 10 cm.")
+    canvas.drawString(50, 778, f"Sizes: {', '.join(report.sizes)} — scale 1:1, check the 10 cm square.")
     canvas.setFont("Helvetica-Bold", 12)
-    canvas.drawString(50, 756, "Bukti per ukuran")
+    canvas.drawString(50, 756, "Proof per size")
     canvas.setFont("Helvetica", 9)
     y = 740
     for size in report.sizes:
         single = report.reports[size]
         good = sum(c.passed for c in single.checks)
-        canvas.drawString(60, y, f"{size}: {'LULUS' if single.passed else 'GAGAL'} "
+        canvas.drawString(60, y, f"{size}: {'PASS' if single.passed else 'FAIL'} "
                                 f"{good}/{len(single.checks)} — "
                                 f"{report.patterns[size].metadata.get('params_hash', '')[:8]}")
         y -= 13
     y -= 8
     canvas.setFont("Helvetica-Bold", 12)
-    canvas.drawString(50, y, "Pemeriksaan grading")
+    canvas.drawString(50, y, "Grading checks")
     canvas.setFont("Helvetica", 9)
     y -= 16
     for check in report.grade_checks:
         canvas.drawString(60, y, f"{check.id} {check.name_id[:30]}: "
-                                f"{'LULUS' if check.passed else 'GAGAL'}")
+                                f"{'PASS' if check.passed else 'FAIL'}")
         y -= 13
     y -= 8
     canvas.setFont("Helvetica-Bold", 12)
-    canvas.drawString(50, y, "Legenda (halaman pola menumpuk semua ukuran 1:1)")
+    canvas.drawString(50, y, "Legend (pattern pages stack all sizes at 1:1)")
     canvas.setFont("Helvetica", 9)
     y -= 16
     for index, size in enumerate(report.sizes):
         _color, _dash, style = _grade_style(index)
         canvas.drawString(60, y, f"{size} = {style}")
         y -= 13
-    canvas.drawString(60, y, "Garis potong: lihat PDF per-size (draft).")
+    canvas.drawString(60, y, "Cut lines: see the per-size PDF (draft).")
     if explanations:
         y -= 19
         canvas.setFont("Helvetica-Bold", 10)
-        canvas.drawString(50, y, "Penjelasan penjahit (detail di grade_report.md):")
+        canvas.drawString(50, y, "Tailor explanation (details in grade_report.md):")
         canvas.setFont("Helvetica", 9)
         shown = 0
         for size in report.sizes:
@@ -1143,7 +1143,7 @@ def draw_nested_panel_page(canvas: Canvas, panel_name: str, report) -> None:
     canvas.drawString(mm_to_pt(MARGIN_MM), mm_to_pt(MARGIN_MM) + 20, legend)
     canvas.setFont("Helvetica", 9)
     canvas.drawString(mm_to_pt(MARGIN_MM), mm_to_pt(MARGIN_MM) + 8,
-                      f"{RULER_MM:.0f} mm pada cetak 100% (periksa penggaris halaman bukti)")
+                      f"{RULER_MM:.0f} mm at 100% print (check the ruler on the proof page)")
     canvas.showPage()
 
 
@@ -1158,7 +1158,7 @@ def export_pdf_graded(report, path: str | BinaryIO, force: bool = False,
 
     assert isinstance(report, GradeReport)
     if not report.passed and not force:
-        raise ValueError("Grading tidak lulus verifikasi — PDF ditolak. Gunakan --force untuk mencetak dengan cap NOT VERIFIED.")
+        raise ValueError("Grading failed verification — PDF refused. Use --force to print with a NOT VERIFIED stamp.")
     canvas = Canvas(path, pagesize=A4_PT, pageCompression=0)
     canvas.setTitle(f"SeamProof grading {report.garment} {','.join(report.sizes)}")
     canvas.setAuthor(f"SeamProof {__version__}")

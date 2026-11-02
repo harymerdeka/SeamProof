@@ -1,7 +1,8 @@
 """LLM backend wrapper: JSON-only calls with validation, one retry and safe logging.
 
 Backend from LLM_BACKEND: "meta" uses the responses API with MUSE_MODEL,
-"baseten" uses chat.completions with BASETEN_MODEL. Call shapes follow the
+"baseten" uses chat.completions with BASETEN_MODEL. BASETEN_TASKS (comma-separated
+purpose prefixes) sends those tasks to Baseten whatever LLM_BACKEND says. Call shapes follow the
 task brief and were checked against the installed openai SDK signatures
 (responses.create accepts model/input/instructions; chat.completions.create
 accepts model/messages). Backends, models and URLs all come from .env via
@@ -129,7 +130,7 @@ def call_vision_json(system: str, text: str, image_data_urls: list[str], schema:
     prompt, last_error = text, ""
     for attempt in (1, 2):
         if attempt == 2:
-            prompt = text + f"\nRespons tidak valid: {last_error}. Kirim ulang hanya JSON yang benar."
+            prompt = text + f"\nInvalid response: {last_error}. Send only the correct JSON again."
         content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt}]
         content.extend({"type": "input_image", "image_url": url} for url in image_data_urls)
         started = time.perf_counter()
@@ -145,7 +146,7 @@ def call_vision_json(system: str, text: str, image_data_urls: list[str], schema:
         try:
             data = json.loads(_strip_fences(reply))
         except json.JSONDecodeError as exc:
-            last_error = f"JSON rusak ({exc.msg})"
+            last_error = f"broken JSON ({exc.msg})"
             _log(purpose, "meta", model, latency_ms, usage, False, attempt)
             continue
         errors = _validate(data, schema) if isinstance(data, dict) else ["$: expected object"]
@@ -158,6 +159,13 @@ def call_vision_json(system: str, text: str, image_data_urls: list[str], schema:
     raise LLMValidationError(f"Vision model kept returning invalid JSON: {last_error}")
 
 
+def backend_for(settings: Settings, purpose: str) -> str:
+    """Pick the backend for one call: a BASETEN_TASKS match wins over LLM_BACKEND."""
+    if any(purpose == t or purpose.startswith(t + "-") for t in settings.baseten_tasks):
+        return "baseten"
+    return settings.llm_backend
+
+
 def call_json(system: str, user: str, schema: dict[str, Any], purpose: str) -> dict[str, Any]:
     """Call the configured backend, demanding JSON, retrying once on bad output.
 
@@ -165,7 +173,7 @@ def call_json(system: str, user: str, schema: dict[str, Any], purpose: str) -> d
     bad payloads, LLMError when the backend errors or is not configured.
     """
     settings = load_settings()
-    backend = settings.llm_backend
+    backend = backend_for(settings, purpose)
     if backend == "meta":
         key, model, base_url = settings.model_api_key, settings.muse_model, META_BASE_URL
         missing = [name for name, value in (("MODEL_API_KEY", key), ("MUSE_MODEL", model)) if not value]
@@ -181,7 +189,7 @@ def call_json(system: str, user: str, schema: dict[str, Any], purpose: str) -> d
     last_error = ""
     for attempt in (1, 2):
         if attempt == 2:
-            payload = user + f"\nRespons tidak valid: {last_error}. Kirim ulang hanya JSON yang benar."
+            payload = user + f"\nInvalid response: {last_error}. Send only the correct JSON again."
         started = time.perf_counter()
         try:
             if backend == "meta":
@@ -202,7 +210,7 @@ def call_json(system: str, user: str, schema: dict[str, Any], purpose: str) -> d
         try:
             data = json.loads(_strip_fences(text))
         except json.JSONDecodeError as exc:
-            last_error = f"JSON rusak ({exc.msg})"
+            last_error = f"broken JSON ({exc.msg})"
             _log(purpose, backend, model, latency_ms, usage, False, attempt)
             continue
         errors = _validate(data, schema) if isinstance(data, dict) else ["$: expected object"]

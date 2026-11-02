@@ -35,7 +35,7 @@ def edit_locality(before: Pattern, after: Pattern, changed_params: Mapping[str, 
     """
     unknown = [name for name in changed_params if name not in PARAMETERS]
     if unknown:
-        return CheckResult(False, [], f"Parameter tak dikenal: {', '.join(sorted(unknown))}.")
+        return CheckResult(False, [], f"Unknown parameter: {', '.join(sorted(unknown))}.")
     allowed = {edge for name in changed_params for edge in PARAMETERS[name].affects}
     extra = GARMENT_AFFECTS.get(after.garment_type, {})
     allowed |= {edge for name in changed_params for edge in extra.get(name, [])}
@@ -58,6 +58,6 @@ def edit_locality(before: Pattern, after: Pattern, changed_params: Mapping[str, 
     if undeclared:
         names = ", ".join(f"{panel}.{edge}" for panel, edge, _dist in undeclared)
         return CheckResult(False, undeclared,
-                           f"Perubahan menyentuh tepi di luar deklarasi: {names}. "
-                           f"Tolak perubahan ini.")
-    return CheckResult(True, moved, "Semua gerakan di dalam tepi yang dideklarasikan.")
+                           f"The change touches edges outside its declaration: {names}. "
+                           f"Refuse this change.")
+    return CheckResult(True, moved, "All movement is within the declared edges.")

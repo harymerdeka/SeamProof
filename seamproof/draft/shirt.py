@@ -19,10 +19,19 @@ Assumptions to tune with real samples (a pattern maker should review):
   a sleeve placket at the wrist, which is not drafted, so it is refused there.
 - Collars are flat collars traced from the joined necklines with a 12 mm
   shoulder overlap (gives a slight roll); style 1 pointed, style 2 rounded
-  (peter pan). No collar stand is drafted. The overlap is taken 100 mm out
+  (peter pan). Style 3 is a straight band (mandarin) collar BAND_COLLAR_MM high.
+  No collar stand is drafted on the flat styles. The overlap is taken 100 mm out
   along the shoulder so dropping the shoulder never reshapes the collar.
 - Patch pocket size scales with bust (clamped 110-140 mm wide); placement is
   recorded in metadata, not drawn as drill holes.
+- Sleeveless (vest): no sleeve or cuff; the armhole is raised and the shoulder
+  cut in (seamproof.draft.finish) and both armholes are bound with bias. A
+  dropped shoulder needs a sleeve, so it is refused.
+- Without a collar the neckline (back neck, front neck and the top of the
+  button stand) is bound with bias cut as two halves joined at centre back,
+  outer ends turned in at the front edges.
+- V neck: straight front neckline to centre front; the stand top continues
+  the V line past centre front. A V neck has no collar here.
 No seam allowances are included here.
 """
 
@@ -33,6 +42,7 @@ from typing import Mapping
 
 from shapely.geometry import LineString
 
+from seamproof.draft.finish import SLEEVELESS_CUT_IN_MM, SLEEVELESS_RAISE_MM, bias_strip, v_line
 from seamproof.fabric import FABRIC_EASE
 from seamproof.measurements import WOMEN_SIZE_TABLE, WomenMeasurements
 from seamproof.params import resolve_params
@@ -49,6 +59,7 @@ CUFF_ELASTIC_PASS_MM = 60.0  # elastic cuff band over the arm girth, so the hand
 CUFF_FITTED_EASE_MM = 30.0  # gathered non-elastic band over the arm girth
 ELASTIC_UNDER_MM = 10.0  # elastic cut this much under the arm girth
 WRIST_ZONE_MM = 60.0  # a cuff this close to the wrist must pass the hand
+BAND_COLLAR_MM = 30.0  # finished height of a band collar (assumption)
 
 
 def _line(edge_id: str, start: Point, end: Point, partner: str | None = None, fold: bool = False) -> Edge:
@@ -72,8 +83,13 @@ def _geometry(m: WomenMeasurements, ease: float, p: dict[str, float]) -> dict[st
     if length <= 0:
         raise ValueError("Shoulder width must exceed the neckline width")
     drop = p["shoulder_drop"]
-    shoulder = Point(tip.x + run.x / length * drop, tip.y + run.y / length * drop)
-    depth = m.armhole_depth + 0.6 * drop
+    sleeveless = p["sleeveless"] >= 0.5
+    if sleeveless and drop > 0:
+        raise ValueError("A dropped shoulder needs a sleeve")
+    # Sleeveless: the shoulder is cut in along its own line (so the collar is unchanged).
+    reach = -SLEEVELESS_CUT_IN_MM if sleeveless else drop
+    shoulder = Point(tip.x + run.x / length * reach, tip.y + run.y / length * reach)
+    depth = m.armhole_depth + 0.6 * drop - (SLEEVELESS_RAISE_MM if sleeveless else 0.0)
     chest_half = (m.bust + ease + p["design_ease"]) / 4
     hem_y = m.back_length + p["shirt_length"]
     hip_need = (_hip_at(m, p["shirt_length"]) + HIP_MIN_EASE_MM) / 4
@@ -91,7 +107,7 @@ def _armhole(name: str, g: dict, p: dict[str, float]) -> Edge:
         shoulder,
         Point(shoulder.x - p["armhole_curve_depth"] * 0.5, shoulder.y + (depth - shoulder.y) * 0.55),
         Point(underarm.x - p["armhole_curve_depth"], depth), underarm,
-    ), "sleeve.cap")
+    ), "armhole_bias.attach" if p["sleeveless"] >= 0.5 else "sleeve.cap")
 
 
 def _arm_notches(name: str, armhole: Edge) -> list[Notch]:
@@ -107,7 +123,7 @@ def _back(m: WomenMeasurements, g: dict, p: dict[str, float]) -> Panel:
     drop = p["neck_drop_back"]
     neck, ns = Point(0, drop), g["neck_side"]
     neckline = Edge("back.neckline", Curve.from_cubic_bezier(
-        neck, Point(ns.x * 0.55, drop), Point(ns.x, drop * 0.55), ns), "collar.neck")
+        neck, Point(ns.x * 0.55, drop), Point(ns.x, drop * 0.55), ns), _neck_partner(p))
     armhole = _armhole("back", g, p)
     bottom = Point(0, g["hem_y"])
     edges = [neckline, _line("back.shoulder", ns, g["shoulder"], "front.shoulder"), armhole,
@@ -123,17 +139,29 @@ def _front(m: WomenMeasurements, g: dict, p: dict[str, float]) -> Panel:
     neck, ns = Point(0, drop), g["neck_side"]
     if drop >= g["depth"]:
         raise ValueError("Front neck drop must stay above the armhole depth")
-    neckline = Edge("front.neckline", Curve.from_cubic_bezier(
-        neck, Point(ns.x * 0.55, drop), Point(ns.x, drop * 0.55), ns), "collar.neck")
+    if p["neck_v"] >= 0.5:
+        # The stand top carries the V line on past centre front to the front edge.
+        neckline = Edge("front.neckline", v_line(neck, ns), _neck_partner(p))
+        edge_top = Point(-ext, drop + drop / ns.x * ext)
+    else:
+        neckline = Edge("front.neckline", Curve.from_cubic_bezier(
+            neck, Point(ns.x * 0.55, drop), Point(ns.x, drop * 0.55), ns), _neck_partner(p))
+        edge_top = Point(-ext, drop)
     armhole = _armhole("front", g, p)
-    edge_bottom, edge_top = Point(-ext, g["hem_y"]), Point(-ext, drop)
+    edge_bottom = Point(-ext, g["hem_y"])
     edges = [neckline, _line("front.shoulder", ns, g["shoulder"], "back.shoulder"), armhole,
              _line("front.side", g["underarm"], g["hem"], "back.side"),
              _line("front.hem", g["hem"], edge_bottom),
              _line("front.edge", edge_bottom, edge_top), _line("front.ext_top", edge_top, neck)]
     # Centre-front notches at neck and hem mark the button line.
-    notches = _arm_notches("front", armhole) + [Notch("front.ext_top", ext), Notch("front.hem", g["hem"].x)]
+    stand_top = math.hypot(edge_top.x - neck.x, edge_top.y - neck.y)
+    notches = _arm_notches("front", armhole) + [Notch("front.ext_top", stand_top), Notch("front.hem", g["hem"].x)]
     return Panel("front", edges, (Point(25, g["depth"]), Point(25, g["hem_y"] - 25)), notches, cut_count=2)
+
+
+def _neck_partner(p: Mapping[str, float]) -> str:
+    """The neckline is sewn to the collar, or bound with bias when there is none."""
+    return "collar.neck" if int(p["collar_style"]) else "neck_bias.attach"
 
 
 def _cap(width: float, height: float) -> Curve:
@@ -296,6 +324,17 @@ def _collar(front: Panel, back: Panel, style: int, width: float) -> Panel:
                  [Notch("collar.neck", back_len)], cut_count=2, cut_on_fold=True)
 
 
+def _band_collar(front: Panel, back: Panel) -> Panel:
+    """Half straight band collar on the CB fold; its neck edge is half the joined neckline."""
+    back_len = edge_length(next(e for e in back.edges if e.id == "back.neckline"))
+    length = back_len + edge_length(next(e for e in front.edges if e.id == "front.neckline"))
+    a, b, c, d = Point(0, 0), Point(length, 0), Point(length, BAND_COLLAR_MM), Point(0, BAND_COLLAR_MM)
+    edges = [Edge("collar.neck", Curve((a, b)), "body.collar_line"), Edge("collar.end", Curve((b, c))),
+             Edge("collar.outer", Curve((c, d))), _line("collar.fold", d, a, fold=True)]
+    return Panel("collar", edges, (Point(15, 5), Point(15, BAND_COLLAR_MM - 5)),
+                 [Notch("collar.neck", back_len)], cut_count=2, cut_on_fold=True)
+
+
 def _pocket(m: WomenMeasurements, count: int) -> Panel:
     """Rectangular patch pocket; the top edge is a 25 mm turned facing."""
     w = min(140.0, max(110.0, m.bust * 0.13))
@@ -315,19 +354,33 @@ def draft_shirt(measurements: WomenMeasurements | Mapping[str, float], fabric: s
     p = resolve_params(params)
     ease = FABRIC_EASE[fabric]
     g = _geometry(m, ease.default_ease_mm, p)
+    style = int(p["collar_style"])
+    if style and p["neck_v"] >= 0.5:
+        raise ValueError("A V neck is drafted without a collar")
     back, front = _back(m, g, p), _front(m, g, p)
     armholes = sum(edge_length(e) for panel in (front, back) for e in panel.edges if e.id.endswith(".armhole"))
-    low, high = ease.sleeve_cap_ease_range_mm
-    sleeve = _sleeve(m, p, armholes, (low + high) / 2)
-    panels = [front, back, sleeve]
-    style = int(p["collar_style"])
+    sleeveless = p["sleeveless"] >= 0.5
+    band, cap_height, hem_join = None, 0.0, 0.0
+    if sleeveless:
+        if p["cuff_depth"] > 0 or p["sleeve_hem_fullness"] > 0 or p["sleeve_cap_gather"] > 0:
+            raise ValueError("A sleeveless shirt has no sleeve, cuff or gathers")
+        panels = [front, back, bias_strip("armhole_bias", armholes, "body.armholes", 2)]
+    else:
+        low, high = ease.sleeve_cap_ease_range_mm
+        sleeve = _sleeve(m, p, armholes, (low + high) / 2)
+        panels = [front, back, sleeve]
+        cap_height = next(e for e in sleeve.edges if e.id == "sleeve.underarm_back").curve.points[0].y
+        band = cuff_band_length(m, p, cap_height) if p["cuff_depth"] > 0 and gathered(p) else None
     if style:
-        panels.append(_collar(front, back, style, p["collar_width"]))
-    cap_height = next(e for e in sleeve.edges if e.id == "sleeve.underarm_back").curve.points[0].y
-    band = cuff_band_length(m, p, cap_height) if p["cuff_depth"] > 0 and gathered(p) else None
-    if p["cuff_depth"] > 0:
+        panels.append(_band_collar(front, back) if style == 3 else _collar(front, back, style, p["collar_width"]))
+    else:
+        edge = {e.id: edge_length(e) for panel in (front, back) for e in panel.edges}
+        # Cut as two halves joined at centre back: a shorter bias strip nests tighter.
+        half_neck = edge["back.neckline"] + edge["front.neckline"] + edge["front.ext_top"]
+        panels.append(bias_strip("neck_bias", half_neck, "body.neck", 2))
+    if not sleeveless and p["cuff_depth"] > 0:
         panels.append(_cuff(sleeve, p["cuff_depth"], band))
-    hem_join = next((edge_length(e) for e in sleeve.edges if e.id == "sleeve.cuff_join"), 0.0)
+        hem_join = next(edge_length(e) for e in sleeve.edges if e.id == "sleeve.cuff_join")
     if int(p["pocket_count"]):
         panels.append(_pocket(m, int(p["pocket_count"])))
     size = next((name for name, values in WOMEN_SIZE_TABLE.items() if values == m), "custom")
@@ -347,7 +400,9 @@ def draft_shirt(measurements: WomenMeasurements | Mapping[str, float], fabric: s
         "gathers_mm": {"sleeve_hem": (hem_join - band) if band is not None else 0.0,
                        "sleeve_cap": p["sleeve_cap_gather"],
                        "elastic_cut": (arm_girth_at(m, p["shirt_sleeve_length"], cap_height) - ELASTIC_UNDER_MM
-                                       if p["cuff_elastic"] >= 0.5 and p["cuff_depth"] > 0 else 0.0)},
+                                       if p["cuff_elastic"] >= 0.5 and p["cuff_depth"] > 0 and not sleeveless
+                                       else 0.0)},
+        "sleeveless": sleeveless,
         "assumptions": ("Boxy no-dart block; grown-on button stand; flat traced collar with "
                         "12 mm shoulder overlap; cap height solved for mid-range cap ease."),
     })

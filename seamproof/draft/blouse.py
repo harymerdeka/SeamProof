@@ -12,6 +12,7 @@ from seamproof.draft.bodice import (
     BLOUSE_HIP_EXTENSION,
     _assemble,
 )
+from seamproof.draft.styled import finish_arms, styled_block
 from seamproof.fabric import FABRIC_EASE
 from seamproof.measurements import WomenMeasurements
 from seamproof.params import resolve_params
@@ -33,8 +34,9 @@ def draft_blouse(
     p = resolve_params(params)
     hip_y = m.front_length + m.waist_to_hip
     hip_half = (m.hip + FABRIC_EASE[fabric].default_ease_mm) / 4
-    pattern, _ = _assemble("blouse", m, fabric, p, hip_y + BLOUSE_HIP_EXTENSION,
+    pattern, _ = _assemble("blouse", styled_block(m, p), fabric, p, hip_y + BLOUSE_HIP_EXTENSION,
                            hip_half + BLOUSE_HEM_EXTRA, 0, 0, True, back_opening)
+    finish_arms(pattern, m, p)
     pattern.metadata["back_opening"] = back_opening
     pattern.metadata["assumptions"] += " Blouse hem 20 mm below hip; back neck bias-finished."
     return pattern

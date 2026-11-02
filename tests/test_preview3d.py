@@ -52,7 +52,7 @@ def test_spec_is_deterministic_finite_json(part, kind, features) -> None:
     b = plan_preview(plan_piece(part, kind, features), "sage")
     assert a == b and json.loads(json.dumps(a)) == a
     assert all(math.isfinite(n) for n in _numbers(a))
-    assert a["color"] == COLORS["sage"][0] and a["version"] == 1
+    assert a["color"] == COLORS["sage"][0] and a["version"] == 2
     for loft in a["lofts"]:
         ys = [r["y"] for r in loft["rings"]]
         assert ys == sorted(ys, reverse=True) and all(r["rx"] > 0 and r["rz"] > 0 for r in loft["rings"])
@@ -120,3 +120,68 @@ def test_api_plans_carry_the_preview() -> None:
                                                          "color": "navy"}).json()
     spec = body["plan"]["preview3d"]
     assert spec["color"] == COLORS["navy"][0] and spec["part"] == "top" and spec["tubes"]
+
+
+def test_preview_dependencies_are_served_locally() -> None:
+    """The renderer and rotation controls load without a third-party CDN."""
+    client = TestClient(app)
+    for filename in ("three.module.js", "OrbitControls.js"):
+        response = client.get(f"/static/{filename}")
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+        assert "export" in response.text
+    assert "MIT License" in client.get("/static/three-LICENSE.txt").text
+    page = client.get("/").text
+    assert '"three": "/static/three.module.js"' in page
+    assert "cdn.jsdelivr.net/npm/three" not in page
+
+
+def _ids(spec, key="seams"):
+    return {item["id"] for item in spec[key]}
+
+
+def test_darts_appear_only_on_blocks_that_draft_them() -> None:
+    """Bodice blocks show side bust darts; shirt and tshirt carry the bust in ease."""
+    for kind in ("blouse", "tunic"):
+        assert {"bust_dart_r", "bust_dart_l"} <= _ids(plan_preview(plan_piece("top", kind, {})))
+    for kind in ("shirt", "tshirt"):
+        assert not any("dart" in i for i in _ids(plan_preview(plan_piece("top", kind, SHIRT if kind == "shirt" else {}))))
+    seamed = _ids(preview_spec("dress", "dress", DRESS))
+    shift = _ids(preview_spec("dress", "dress", dict(DRESS, waist_seam=False)))
+    assert "bodice_dart_front_r" in seamed and "skirt_dart_back_l" in seamed
+    assert "bust_dart_r" in shift and not any("bodice_dart" in i for i in shift)
+    assert "waist_dart_front_r" in _ids(preview_spec("bottom", "skirt", SKIRT))
+
+
+def test_neckband_only_on_the_tshirt() -> None:
+    """The knit neckband is a tshirt panel; woven blocks finish the neck with a facing."""
+    assert "neckband" in _ids(plan_preview(plan_piece("top", "tshirt", {})), "lofts")
+    assert "neckband" not in _ids(plan_preview(plan_piece("top", "blouse", {})), "lofts")
+
+
+def test_seams_and_hem_stitch() -> None:
+    """Every top has shoulder and side seams; a faced scallop hem has no hem stitch."""
+    top = _ids(preview_spec("top", "shirt", SHIRT))
+    assert {"shoulder_seam_r", "shoulder_seam_l", "side_seam_r", "side_seam_l", "hem_stitch"} <= top
+    assert "hem_stitch" not in _ids(preview_spec("dress", "dress", DRESS))  # DRESS is scalloped
+
+
+def test_form_never_reaches_the_cloth() -> None:
+    """Wherever the garment covers the form, the form ring is inside the garment."""
+    for spec in (preview_spec("top", "tunic", {"fit": "fitted", "length": "knee"}),
+                 preview_spec("dress", "dress", DRESS), preview_spec("bottom", "skirt", SKIRT)):
+        body = spec["lofts"][0]["rings"]
+        for ring in spec["form"]["rings"]:
+            if body[-1]["y"] <= ring["y"] <= body[0]["y"]:
+                for a, b in zip(body, body[1:]):
+                    if b["y"] <= ring["y"] <= a["y"]:
+                        assert ring["rx"] < max(a["rx"], b["rx"]) and ring["rz"] < max(a["rz"], b["rz"])
+
+
+def test_sleeve_cap_starts_at_the_shoulder_and_is_narrower_than_the_body() -> None:
+    """The sleeve's top edge meets the shoulder (no flap above it) and the arm is slimmer than the torso."""
+    spec = preview_spec("top", "shirt", SHIRT)
+    sleeve, body = _tube(spec, "sleeve_r"), spec["lofts"][0]["rings"]
+    start, r0 = sleeve["path"][0], sleeve["radii"][0]
+    assert start[1] + r0 <= body[1]["y"] + r0 * 0.6  # cap top stays near the shoulder line
+    assert r0 < 0.6 * body[2]["rx"]

@@ -50,7 +50,7 @@ def test_deltas_clamp_to_param_ranges() -> None:
     v1 = REGISTRY["tunic"](M, "woven", {})
     proposal, v2 = fit_correct(v1, notes=["flare sangat lebar"] * 10)
     assert proposal.changes == {"side_flare": 0.0}
-    assert any("dijepit" in note for note in proposal.clamped)
+    assert any("clamped" in note for note in proposal.clamped)
     assert v2 is not None
 
 
@@ -101,12 +101,12 @@ def test_fit_md_and_overlay_carry_diff(tmp_path) -> None:
     v1 = _blouse_v1()
     proposal, v2 = fit_correct(v1, notes=["ujung kupnat runcing"])
     text = fit_md(proposal, v1, "v2")
-    assert "konfirmasi sebelum memotong" in text
+    assert "confirm before cutting" in text
     assert "| bust_dart_clearance | 20.0 | 27.5 |" in text
     overlay = tmp_path / "overlay.svg"
     export_fit_overlay_svg(v1, v2, str(overlay))
     content = overlay.read_text()
-    assert "hitam=v1" in content and 'stroke="green"' in content
+    assert "black=v1" in content and 'stroke="green"' in content
 
 
 def test_cli_fitcorrect_writes_v2(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -118,4 +118,11 @@ def test_cli_fitcorrect_writes_v2(monkeypatch: pytest.MonkeyPatch, tmp_path) -> 
                                       "--notes", "ujung kupnat runcing", "--out", str(out)])
     assert main() == 0
     assert (out / "v2_pattern.pdf").read_bytes().startswith(b"%PDF")
-    assert "konfirmasi sebelum memotong" in (out / "fit.md").read_text()
+    assert "confirm before cutting" in (out / "fit.md").read_text()
+
+
+def test_english_notes_map_like_indonesian() -> None:
+    """Tailors may write notes in English: keys and severity read the same way."""
+    issues = notes_to_issues(["very tight chest", "dart tip slightly too sharp", "ketiak sangat sempit"])
+    assert [(i.key, i.severity) for i in issues] == [("body_too_tight_chest", 3), ("dart_point_too_pointed", 1),
+                                                     ("pulling_at_underarm", 3)]
