@@ -13,6 +13,8 @@ cutting room).
 
 Built for the Meta Global AI Developer Hackathon (Oct 27 – Nov 4, 2026).
 
+**▶ Demo video (3 min):** https://youtu.be/YH62FWsAf1o
+
 > **What existed before the hackathon:** only the workshop (@pintar.jahit) and one
 > sewn sample shirt. All code in this repo was written during the hackathon.
 
