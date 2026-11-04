@@ -32,6 +32,7 @@ from typing import Any
 
 from seamproof.flat import (
     ARMPIT_Y,
+    YOKE_Y,
     BODY_HALF,
     CX,
     DRESS_HEM_Y,
@@ -208,6 +209,10 @@ def _top(f: dict[str, Any], kind: str) -> dict[str, Any]:
                             "seams": _body_seams(body, hem_y, scalloped=False)}
     if kind in BUST_DART_KINDS:
         spec["seams"] += _bust_darts(body, half)
+    if f.get("back_yoke"):
+        spec["seams"].append(_yoke_seam(body))
+    if f.get("back_pleat"):
+        spec["seams"] += _back_pleat(body, hem_y)
     v_top = _v_neck(f, body, neck_y)
     if v_top:
         spec["lines"].append(v_top)
@@ -223,6 +228,32 @@ def _top(f: dict[str, Any], kind: str) -> dict[str, Any]:
         spec["patches"].append({"id": f"pocket_{i + 1}", "points": _on_front(
             body, [(x - 10, ARMPIT_Y - 4), (x + 10, ARMPIT_Y - 4), (x + 10, ARMPIT_Y + 16), (x, ARMPIT_Y + 21), (x - 10, ARMPIT_Y + 16)])})
     return spec
+
+
+def _yoke_seam(body: list[dict[str, float]], lift: float = 0.1) -> dict[str, Any]:
+    """Back yoke seam: a half ring across the back of the body at the flat yoke height."""
+    y = _y(YOKE_Y)
+    rx, rz = _radii_at(body, y) or (body[1]["rx"], body[1]["rz"])
+    return {"id": "yoke_seam", "points": [
+        [round((rx + lift) * math.sin(a), 3), y, round((rz + lift) * math.cos(a), 3)]
+        for a in [math.pi / 2 + k * math.pi / 24 for k in range(25)]]}
+
+
+def _back_pleat(body: list[dict[str, float]], hem_y: float, lift: float = 0.12) -> list[dict[str, Any]]:
+    """Two pleat folds down the centre back from the yoke, spreading slightly towards the hem."""
+    out = []
+    bottom = (YOKE_Y + hem_y) / 2
+    for sign, side in ((1.0, "r"), (-1.0, "l")):
+        points = []
+        for i in range(11):
+            y_flat = YOKE_Y + (bottom - YOKE_Y) * i / 10
+            y = _y(y_flat)
+            rx, rz = _radii_at(body, y) or (body[-1]["rx"], body[-1]["rz"])
+            x = _r(1.5 + 4.5 * i / 10) * sign
+            u = min(abs(x) / rx, 0.98) if rx else 0.0
+            points.append([round(x, 3), y, round(-(rz * math.sqrt(1 - u * u) + lift), 3)])
+        out.append({"id": f"back_pleat_{side}", "points": points})
+    return out
 
 
 def _neckband(body: list[dict[str, float]], neck_y: float) -> dict[str, Any]:

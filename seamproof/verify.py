@@ -20,7 +20,7 @@ from shapely.errors import GEOSException
 from shapely.geometry import LineString
 
 from seamproof.fabric import FABRIC_EASE
-from seamproof.pattern import Edge, Panel, Pattern, Point, edge_length, panel_polygon, params_hash
+from seamproof.pattern import Curve, Edge, Panel, Pattern, Point, edge_length, panel_polygon, params_hash
 
 G_TOL_MM = 1.0
 SHOULDER_TOL_MM = 1.0
@@ -41,6 +41,7 @@ WAIST_FINISH_TOL_MM = 2.0
 HEM_FACING_TOL_MM = 1.0
 WAIST_SEAM_TOL_MM = 2.0
 BIAS_TOL_MM = 2.0
+YOKE_TOL_MM = 1.0
 # Gathered sleeves (mirrors the shirt draft rules, checked independently):
 # a fitted cuff is the arm girth at the cuff line plus 60 mm (elastic, slides
 # over the hand) or 30 mm (no elastic); the gathered hem must be 1-3x the cuff.
@@ -151,8 +152,48 @@ def verify_pattern(pattern: Pattern) -> Report:
     except ValueError:
         fail("G2", "Parameter hash", "Parameters contain a number that cannot be hashed.")
 
+    yoked = pattern.garment_type == "shirt" and float(params.get("back_yoke", 0)) >= 0.5
+    if yoked and "yoke" in panels:
+        # A yoked back is checked as the whole back it was cut from: the yoke
+        # carries the back neck and shoulder, and its armhole runs on into the lower back's.
+        whole = {"back.neckline": "yoke.neckline", "back.shoulder": "yoke.shoulder"}
+        for back_id, yoke_id in whole.items():
+            if yoke_id in edges:
+                edges[back_id] = edges[yoke_id]
+        if "yoke.armhole" in edges and "back.armhole" in edges:
+            top, low = edges["yoke.armhole"], edges["back.armhole"]
+            edges["back.armhole"] = Edge("back.armhole", Curve(top.curve.points + low.curve.points[1:]),
+                                         top.seam_partner_id)
+
     def need(*names: str) -> bool:
         return all(name in edges for name in names)
+
+    # Y1: a yoked shirt back has a yoke whose seam matches the lower back's (pleat folded closed).
+    pleat = float(pattern.metadata.get("back_pleat_mm", 0.0)) if float(params.get("back_pleat", 0)) >= 0.5 else 0.0
+    if yoked:
+        if need("yoke.seam", "back.yoke_seam"):
+            top, low = edge_length(edges["yoke.seam"]), edge_length(edges["back.yoke_seam"]) - pleat
+            diff = abs(top - low)
+            if diff <= YOKE_TOL_MM:
+                ok("Y1", "Back yoke", f"Yoke seam and lower back match ({top:.1f} vs {low:.1f} mm).",
+                   diff, 0.0, YOKE_TOL_MM)
+            else:
+                fail("Y1", "Back yoke", f"Yoke seam {top:.1f} mm vs lower back {low:.1f} mm (difference "
+                     f"{diff:.1f} mm, limit {YOKE_TOL_MM:.0f} mm). Match the yoke seam lines.",
+                     diff, 0.0, YOKE_TOL_MM)
+        else:
+            fail("Y1", "Back yoke", "A yoked shirt needs a yoke and a lower back with matching yoke seams.")
+    # Y2: a back pleat is marked by CB notches on the yoke seam and the hem.
+    if pleat and need("back.yoke_seam", "back.hem"):
+        have = {(n.edge_id, round(n.distance_from_start_mm, 3)) for n in panels["back"].notches}
+        hem = edge_length(edges["back.hem"])
+        if ("back.yoke_seam", round(pleat, 3)) in have and ("back.hem", round(hem - pleat, 3)) in have:
+            ok("Y2", "Back pleat", f"The {2 * pleat:.0f} mm back pleat is marked at the yoke seam and the hem.")
+        else:
+            fail("Y2", "Back pleat", "The back pleat line is not notched at both the yoke seam and the hem. "
+                 "Mark the centre-back fold of the pleat.")
+    elif float(params.get("back_pleat", 0)) >= 0.5 and pattern.garment_type == "shirt":
+        fail("Y2", "Back pleat", "A back pleat needs a yoke seam and a back hem.")
 
     # S1: shoulder seams match.
     if need("front.shoulder", "back.shoulder"):
@@ -466,14 +507,14 @@ def verify_pattern(pattern: Pattern) -> Report:
                 placket = float(params["placket_width"])
                 depth = measures["armhole_depth"] + 0.6 * float(params["shoulder_drop"])
                 total = 2 * (_station_width(panels["front"], depth) - placket
-                             + _station_width(panels["back"], depth))
+                             + _station_width(panels["back"], depth) - pleat)
                 _width(ok, fail, "W1", "Chest width", total,
                        measures["bust"] + ease_mm + float(params["design_ease"]))
                 below = float(params["shirt_length"])
                 hem_y = measures["back_length"] + below - 1.0
                 body = (measures["hip"] if below >= measures["waist_to_hip"] else
                         measures["waist"] + (measures["hip"] - measures["waist"]) * below / measures["waist_to_hip"])
-                total = 2 * (_station_width(panels["front"], hem_y) - placket + _station_width(panels["back"], hem_y))
+                total = 2 * (_station_width(panels["front"], hem_y) - placket + _station_width(panels["back"], hem_y) - pleat)
                 need_mm = body + SHIRT_HIP_MIN_EASE_MM
                 if total >= need_mm - WIDTH_TOL_MM:
                     ok("W3", "Hip room", f"Hem girth {total:.1f} mm is enough for the {body:.0f} mm body "
@@ -628,7 +669,8 @@ def verify_pattern(pattern: Pattern) -> Report:
     # N2: shoulder-point notches open both armholes.
     if need("front.armhole", "back.armhole"):
         have = {(n.edge_id, n.distance_from_start_mm) for panel in pattern.panels for n in panel.notches}
-        if ("front.armhole", 0) in have and ("back.armhole", 0) in have:
+        back_top = "yoke.armhole" if yoked and "yoke" in panels else "back.armhole"
+        if ("front.armhole", 0) in have and (back_top, 0) in have:
             ok("N2", "Shoulder notches", "Shoulder-point notches are on the front and back armholes.")
         else:
             fail("N2", "Shoulder notches", "Shoulder-point notch (distance 0) is missing on the front or back armhole.")

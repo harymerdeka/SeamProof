@@ -75,7 +75,9 @@ REFINE_SCHEMA: dict[str, Any] = {
 
 _CATALOGUE = (
     f"Top kinds: {'|'.join(TOP_KINDS)}. Top features — {_options(TOP_FEATURES)}; pockets: 0|1|2; "
-    "cuff: true|false; elastic_cuff: true|false; contrast_collar: true|false; contrast_cuff: true|false.\n"
+    "cuff: true|false; elastic_cuff: true|false; contrast_collar: true|false; contrast_cuff: true|false; "
+    "back_yoke: true|false (horizontal seam across the upper back; shirt only); "
+    "back_pleat: true|false (centre-back box pleat under the yoke; shirt only).\n"
     "sleeve_style: bishop = sleeve full at the hem, gathered into a cuff (balloon/bishop); puff = bishop "
     "plus a gathered, puffed shoulder/cap; elastic_cuff = cuff gathered on elastic (ruched, shirred).\n"
     f"Bottom kinds: {'|'.join(BOTTOM_KINDS)}. Bottom features — {_options(BOTTOM_FEATURES)}; "
@@ -275,14 +277,16 @@ def refine_design(current: dict[str, Any], instruction: str, call_fn: CallFn | N
 
 
 # Parts of a garment the user can take from different photos (pjstudio-style
-# "front from photo 1, sleeves from photo 2"). Assumption: photo categories
-# carry no front/back split, so "front bodice" groups the front-only details.
+# "front from photo 1, sleeves from photo 2, back from photo 3"). GROUP_SIDE
+# says where a part is seen: front details, back details, or both sides.
 MERGE_GROUPS: dict[str, list[tuple[str, str, tuple[str, ...]]]] = {
     "top": [("siluet", "Kind, silhouette & length", ("kind", "fit", "length")),
-            ("badan", "Front bodice (opening, pockets)", ("opening", "pockets")),
             ("lengan", "Sleeves & shoulder", ("sleeve_length", "sleeve_style", "shoulder", "cuff", "elastic_cuff",
                                          "contrast_cuff")),
-            ("kerah", "Collar & neckline", ("collar", "neckline", "contrast_collar"))],
+            ("badan", "Front opening & pockets", ("opening", "pockets")),
+            ("kerah", "Collar & neckline", ("collar", "neckline", "contrast_collar")),
+            ("kuk", "Back yoke seam", ("back_yoke",)),
+            ("lipit", "Back pleat", ("back_pleat",))],
     "bottom": [("siluet", "Kind & silhouette", ("kind", "silhouette")),
                ("panjang", "Length", ("length",)),
                ("kelim", "Hem", ("hem",)),
@@ -293,9 +297,10 @@ MERGE_GROUPS: dict[str, list[tuple[str, str, tuple[str, ...]]]] = {
               ("rok", "Skirt (silhouette, length, hem)", ("silhouette", "length", "hem")),
               ("pinggang", "Waist seam", ("waist_seam",))],
 }
+GROUP_SIDE: dict[str, str] = {"badan": "front", "kerah": "front", "kuk": "back", "lipit": "back"}
 _TABLES = {"top": (TOP_KINDS, TOP_FEATURES), "bottom": (BOTTOM_KINDS, BOTTOM_FEATURES),
            "dress": (DRESS_KINDS, DRESS_FEATURES)}
-_FLAGS = {"top": ("cuff", "elastic_cuff", "contrast_collar", "contrast_cuff"), "bottom": ("waistband",),
+_FLAGS = {"top": ("cuff", "elastic_cuff", "contrast_collar", "contrast_cuff", "back_yoke", "back_pleat"), "bottom": ("waistband",),
           "dress": ("waist_seam", "cuff", "elastic_cuff", "contrast_collar", "contrast_cuff")}
 
 
@@ -372,6 +377,7 @@ def merge_photos(target: str, base: int, sources: dict[int, Any], assign: dict[s
                 features[key] = lender.features[key]
         provenance[group_id] = source
         groups.append({"id": group_id, "label": label, "keys": list(keys), "sources": options, "chosen": source,
+                       "side": GROUP_SIDE.get(group_id, "both"),
                        "lenders": {str(n): p.part for n, p in lenders.items() if p is not None}})
     merged = _piece({"part": target, "kind": kind, "features": features}, warnings)
     assert merged is not None  # target is a valid part, checked above

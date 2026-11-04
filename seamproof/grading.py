@@ -182,7 +182,8 @@ def _armhole_total(pattern: Pattern) -> float | None:
     back = _edge_len(pattern, "back", "back.armhole")
     if front is None or back is None:
         return None
-    return front + back
+    yoke = _edge_len(pattern, "yoke", "yoke.armhole")  # a yoked back carries the top of the armhole
+    return front + back + (yoke or 0.0)
 
 
 @dataclass

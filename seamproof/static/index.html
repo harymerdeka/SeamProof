@@ -14,19 +14,22 @@
      where you are and what is selected; tailor's-chalk blue marks the next
      action; leaf and brick are pass and fail. */
   :root {
-    --ground: #edefea; --surface: #ffffff; --sheet: #fafaf7; --paper: #f6f4ee;
-    --ink: #16201b; --ink-2: #2b3530; --muted: #5b6862; --faint: #8c9790;
-    --rule: #d5dad5; --rule-strong: #b6c0b9; --wash: #e4e8e3; --dot: #d3d6cd;
-    --mat: #1e4a39; --mat-deep: #143326; --mat-ink: #e9efe9; --mat-muted: rgba(233, 239, 233, .7);
-    --grid: rgba(235, 201, 68, .16); --grid-major: rgba(235, 201, 68, .42);
-    --tape: #ebc944; --tape-soft: #f8edbd; --tape-ink: #3a3110;
-    --chalk: #2c5a8c; --chalk-deep: #224a75; --chalk-soft: #e4ecf5;
-    --brick: #a3352a; --brick-soft: #f7e4e0; --leaf: #2f6b4a; --leaf-soft: #e2eee6;
+    /* Theme: slate #718A9B + mist #D9DEDF + forest #224D3A. Mist is the
+       ground, forest is the cutting mat and the next action, slate is the
+       tape (where you are / selected); leaf and brick stay as pass and fail. */
+    --ground: #D9DEDF; --surface: #ffffff; --sheet: #f6f8f8; --paper: #eef1f1;
+    --ink: #1b2a25; --ink-2: #2e3d37; --muted: #55656d; --faint: #8a979e;
+    --rule: #c9d0d2; --rule-strong: #a9b4b9; --wash: #e6eaeb; --dot: #bcc5c8;
+    --mat: #224D3A; --mat-deep: #183829; --mat-ink: #eef1f0; --mat-muted: rgba(238, 241, 240, .72);
+    --grid: rgba(217, 222, 223, .12); --grid-major: rgba(163, 184, 199, .45);
+    --tape: #718A9B; --tape-soft: #e2e8ec; --tape-ink: #1a2a33;
+    --chalk: #224D3A; --chalk-deep: #183829; --chalk-soft: #dfe8e3;
+    --brick: #c53030; --brick-soft: #fde4e4; --leaf: #1f8a5b; --leaf-soft: #e0f3ea;
     --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
     --r-sm: 6px; --r-md: 12px; --r-lg: 16px;
     --panel-w: 430px; --head-h: 112px;
     --lift: 0 1px 0 rgba(0, 0, 0, .22), 0 14px 30px rgba(0, 0, 0, .28);
-    --sheet-shadow: 0 1px 2px rgba(22, 32, 27, .06), 0 6px 18px rgba(22, 32, 27, .06);
+    --sheet-shadow: 0 1px 2px rgba(27, 42, 37, .06), 0 6px 18px rgba(27, 42, 37, .06);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -42,29 +45,29 @@
   body.on-landing header.top, body.on-landing .studio { display: none; }
   body:not(.on-landing) #landing { display: none; }
   .lp-wrap { width: 100%; max-width: 1160px; margin: 0 auto; padding: 0 24px; }
-  #landing { --lp-bg: #fbf7f0; --lp-ink: #1d2a25; --lp-dim: #5c6a63; --lp-line: #e8e0d3; --lp-ai: linear-gradient(100deg, #6a4dff, #e8527a 70%, #ff8a4c); --lp-ai-solid: #6a4dff;
+  #landing { --lp-bg: #eef1f1; --lp-ink: #1b2a25; --lp-dim: #55656d; --lp-line: #c9d0d2; --lp-ai: linear-gradient(100deg, #718A9B, #224D3A 75%); --lp-ai-solid: #224D3A;
              background: var(--lp-bg); color: var(--lp-ink); overflow: hidden; font-size: 17px; }
   .lp-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; }
   .lp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 28px; border-radius: 999px; background: var(--lp-ink); color: #fff; font-weight: 700; text-decoration: none; transition: transform .2s; }
   .lp-btn:hover { transform: translateY(-2px); }
-  .lp-btn.ai { background: var(--lp-ai); box-shadow: 0 12px 28px rgba(106, 77, 255, .3); }
+  .lp-btn.ai { background: var(--lp-ai); box-shadow: 0 12px 28px rgba(34, 77, 58, .3); }
   .lp-btn.small { min-height: 42px; padding: 0 20px; font-size: 14.5px; }
   .lp-btn.line { background: transparent; color: var(--lp-ink); box-shadow: inset 0 0 0 1.5px var(--lp-ink); }
   .lp-ai-word { background: var(--lp-ai); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .lp-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; padding: 32px 0 72px; }
-  .lp-badge { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 6px 14px; border-radius: 999px; background: #efe9ff; color: #4a32c9; font-size: 14px; font-weight: 700; }
+  .lp-badge { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 6px 14px; border-radius: 999px; background: #dfe8e3; color: #224D3A; font-size: 14px; font-weight: 700; }
   .lp-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--lp-ai-solid); animation: lpPulse 1.6s infinite; }
   .lp-hero h1 { margin: 0; font-size: clamp(44px, 6.2vw, 80px); line-height: 1.02; font-weight: 800; letter-spacing: -.035em; }
   .lp-lead { margin: 20px 0 30px; max-width: 28em; font-size: clamp(18px, 1.8vw, 21px); line-height: 1.45; color: var(--lp-dim); }
   .lp-cta { display: flex; flex-wrap: wrap; gap: 12px; }
   .lp-stage { position: relative; margin: 0 40px 0 70px; }
-  .lp-photo { position: relative; overflow: hidden; aspect-ratio: 4 / 5; border-radius: 28px; box-shadow: 0 30px 70px rgba(29, 42, 37, .22); }
+  .lp-photo { position: relative; overflow: hidden; aspect-ratio: 4 / 5; border-radius: 28px; box-shadow: 0 30px 70px rgba(27, 42, 37, .22); }
   .lp-photo img { width: 100%; height: 100%; object-fit: cover; display: block; animation: lpZoom 14s ease-in-out infinite alternate; }
-  .lp-scan { position: absolute; left: 0; right: 0; top: 0; height: 90px; background: linear-gradient(180deg, transparent, rgba(106, 77, 255, .4)); border-bottom: 2px solid #fff; animation: lpScan 3.2s ease-in-out infinite; }
-  .lp-float { position: absolute; border-radius: 18px; background: #fff; box-shadow: 0 18px 44px rgba(29, 42, 37, .22); }
+  .lp-scan { position: absolute; left: 0; right: 0; top: 0; height: 90px; background: linear-gradient(180deg, transparent, rgba(34, 77, 58, .4)); border-bottom: 2px solid #fff; animation: lpScan 3.2s ease-in-out infinite; }
+  .lp-float { position: absolute; border-radius: 18px; background: #fff; box-shadow: 0 18px 44px rgba(27, 42, 37, .22); }
   .lp-agent { left: -70px; top: 28px; width: 232px; padding: 14px 16px; animation: lpFloat 6s ease-in-out infinite; }
   .lp-agent-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; font-weight: 800; }
-  .lp-agent ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px; color: #a3aca7; }
+  .lp-agent ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px; color: #9aa6ac; }
   .lp-agent li { display: flex; gap: 8px; align-items: center; transition: color .3s; }
   .lp-agent li::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 2px currentColor; }
   .lp-agent li.on { color: var(--lp-ai-solid); font-weight: 700; }
@@ -72,7 +75,7 @@
   .lp-agent li.done { color: var(--lp-ink); }
   .lp-agent li.done::before { background: #2f9a66; box-shadow: none; }
   .lp-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-  .lp-chips span { padding: 2px 9px; border-radius: 999px; background: #efe9ff; color: #4a32c9; font-size: 12px; font-weight: 700; opacity: 0; transform: translateY(5px); transition: all .4s; }
+  .lp-chips span { padding: 2px 9px; border-radius: 999px; background: #dfe8e3; color: #224D3A; font-size: 12px; font-weight: 700; opacity: 0; transform: translateY(5px); transition: all .4s; }
   .lp-chips.show span { opacity: 1; transform: none; }
   .lp-chips.show span:nth-child(2) { transition-delay: .12s; } .lp-chips.show span:nth-child(3) { transition-delay: .24s; } .lp-chips.show span:nth-child(4) { transition-delay: .36s; }
   .lp-result { right: -40px; bottom: 24px; width: 270px; overflow: hidden; opacity: 0; transform: translateY(16px) scale(.96); transition: all .6s; }
@@ -93,11 +96,11 @@
   .lp-shot { position: relative; }
   .lp-shot > img { width: 100%; aspect-ratio: 5 / 4; object-fit: cover; display: block; border-radius: 26px; }
   .lp-bubbles { position: absolute; left: 18px; right: 18px; bottom: 18px; display: grid; gap: 8px; }
-  .lp-bubble { max-width: 82%; padding: 10px 15px; border-radius: 18px; background: #fff; font-size: 15px; font-weight: 600; box-shadow: 0 8px 22px rgba(29, 42, 37, .18); }
+  .lp-bubble { max-width: 82%; padding: 10px 15px; border-radius: 18px; background: #fff; font-size: 15px; font-weight: 600; box-shadow: 0 8px 22px rgba(27, 42, 37, .18); }
   .lp-bubble.me { justify-self: end; background: var(--lp-ink); color: #fff; }
   .lp-bubble.bot { justify-self: start; background: var(--lp-ai); color: #fff; }
   .lp-fix { position: absolute; left: 18px; right: 18px; bottom: 18px; padding: 15px 18px; font-size: 16px; font-weight: 700; }
-  .lp-fix { border-radius: 18px; background: #fff; box-shadow: 0 8px 22px rgba(29, 42, 37, .18); display: grid; }
+  .lp-fix { border-radius: 18px; background: #fff; box-shadow: 0 8px 22px rgba(27, 42, 37, .18); display: grid; }
   .lp-fix span { grid-area: 1 / 1; }
   .lp-fix .bad { color: #c23a2d; animation: lpBad 7s infinite; }
   .lp-fix .work { color: var(--lp-ai-solid); opacity: 0; animation: lpWork 7s infinite; }
@@ -176,13 +179,13 @@
   .canvas-bar .tools { margin-left: auto; display: flex; gap: 6px; }
   .canvas-bar .tools button { border: 1px solid var(--rule-strong); background: var(--surface); height: 30px; min-width: 30px;
                               border-radius: var(--r-sm); font-weight: 700; font-size: 13px; padding: 0 9px; }
-  main.canvas.is-mat { background: var(--mat); }
+  main.canvas.is-mat { --tape: #a3b8c7; --tape-ink: #14232c; background: var(--mat); }
   .is-mat .canvas-bar { background: var(--mat-deep); color: var(--mat-ink); border-color: transparent; }
   .is-mat #mat-sub { color: var(--mat-muted); }
-  .is-mat .views { background: rgba(233, 239, 233, .1); }
+  .is-mat .views { background: rgba(255, 255, 255, .1); }
   .is-mat .views button { color: var(--mat-muted); }
   .is-mat .views button.active { background: var(--tape); color: var(--tape-ink); }
-  .is-mat .canvas-bar .tools button { border-color: rgba(233, 239, 233, .25); background: transparent; color: var(--mat-ink); }
+  .is-mat .canvas-bar .tools button { border-color: rgba(238, 241, 240, .25); background: transparent; color: var(--mat-ink); }
   .canvas-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
   .is-board .canvas-body { background-image: radial-gradient(var(--dot) 1px, transparent 1.2px); background-size: 18px 18px; }
   .is-mat .canvas-body { overflow: hidden; touch-action: none;
@@ -200,8 +203,8 @@
   svg.pattern text.label { fill: var(--mat-ink); font-family: var(--font); font-weight: 700; font-size: 11px; }
   svg.pattern g[id]:hover polyline.cut { stroke: var(--tape); stroke-width: 2.6px; }
   svg.pattern g.panel-selected polyline.cut { stroke: var(--tape); stroke-width: 2.6px; }
-  svg.pattern rect.mk-fabric { fill: rgba(233, 239, 233, .05); stroke: var(--tape); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-  svg.pattern polygon.piece { fill: rgba(233, 239, 233, .07); }
+  svg.pattern rect.mk-fabric { fill: rgba(238, 241, 240, .05); stroke: var(--tape); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  svg.pattern polygon.piece { fill: rgba(238, 241, 240, .07); }
   svg.pattern polyline.fold { stroke: #9fc0e6; stroke-width: 1.2px; stroke-dasharray: 9 3 2 3; }
   svg.pattern polyline.notch { stroke: #fff; stroke-width: 1.6px; }
   svg.pattern line.mk-tick { stroke: var(--tape); stroke-width: 1px; }
@@ -211,19 +214,19 @@
   svg.pattern .mk-title, svg.pattern .mk-sub { display: none; }
   svg.pattern g.mk-piece:hover polyline.cut { stroke: var(--tape); stroke-width: 2.6px; }
   .mat-legend { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; color: var(--mat-ink);
-                font-size: 11.5px; background: rgba(20, 51, 38, .85); padding: 6px 10px; border-radius: var(--r-sm); }
+                font-size: 11.5px; background: rgba(24, 56, 41, .85); padding: 6px 10px; border-radius: var(--r-sm); }
   .mat-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
   .mat-scale { position: absolute; right: 14px; bottom: 14px; color: var(--mat-ink); font-size: 11.5px;
-               background: rgba(20, 51, 38, .85); padding: 6px 10px; border-radius: var(--r-sm); }
+               background: rgba(24, 56, 41, .85); padding: 6px 10px; border-radius: var(--r-sm); }
   .mat-hover { position: absolute; left: 14px; top: 12px; background: var(--tape); color: var(--tape-ink); font-weight: 700;
                font-size: 12px; padding: 3px 9px; border-radius: var(--r-sm); opacity: 0; transition: opacity .12s; pointer-events: none; }
-  .mat-sizes { position: absolute; right: 14px; top: 12px; display: flex; gap: 4px; background: rgba(20, 51, 38, .85); padding: 4px; border-radius: var(--r-sm); }
+  .mat-sizes { position: absolute; right: 14px; top: 12px; display: flex; gap: 4px; background: rgba(24, 56, 41, .85); padding: 4px; border-radius: var(--r-sm); }
   .mat-sizes button { border: 0; background: transparent; color: var(--mat-ink); font-weight: 800; font-stretch: 125%; font-size: 12.5px;
                       height: 28px; min-width: 34px; border-radius: 5px; padding: 0 8px; }
   .mat-sizes button.active { background: var(--tape); color: var(--tape-ink); }
   .mat-sizes button.bad { color: #f2a99f; }
   .mat-panels { position: absolute; left: 14px; right: 14px; top: 12px; display: flex; gap: 4px;
-    overflow-x: auto; background: rgba(20, 51, 38, .95); padding: 4px; border-radius: var(--r-sm); }
+    overflow-x: auto; background: rgba(24, 56, 41, .95); padding: 4px; border-radius: var(--r-sm); }
   .mat-panels button { flex: none; border: 0; border-radius: 5px; padding: 5px 10px;
     background: transparent; color: var(--mat-ink); font-size: 12px; font-weight: 700; }
   .mat-panels button[aria-pressed="true"] { background: var(--tape); color: var(--tape-ink); }
@@ -242,7 +245,7 @@
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; width: 100%; max-width: 980px; }
   .opt { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-lg); box-shadow: var(--sheet-shadow);
          padding: 14px; display: grid; gap: 10px; text-align: left; cursor: pointer; transition: transform .12s, box-shadow .12s; }
-  .opt:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(22, 32, 27, .08), 0 14px 30px rgba(22, 32, 27, .1); }
+  .opt:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(27, 42, 37, .08), 0 14px 30px rgba(27, 42, 37, .1); }
   .opt[aria-pressed="true"] { border-color: var(--tape-ink); box-shadow: inset 0 0 0 1px var(--tape-ink), var(--sheet-shadow); }
   .opt img { width: 100%; aspect-ratio: 570 / 300; object-fit: contain; background: var(--sheet); border-radius: var(--r-md); }
   .opt .v3d { aspect-ratio: 1 / 1; max-height: 360px; }
@@ -259,7 +262,7 @@
   .hero img { width: 100%; max-height: 42vh; object-fit: contain; }
   /* Optional 3D preview: built by preview3d.py, rendered with three.js; the flat is the fallback. */
   .v3d { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden;
-         background: radial-gradient(ellipse at 50% 30%, #ffffff 0%, var(--sheet) 55%, #e8e5dc 100%); }
+         background: radial-gradient(ellipse at 50% 30%, #ffffff 0%, var(--sheet) 55%, #d6edf9 100%); }
   .hero .v3d { aspect-ratio: 16 / 10; max-height: 50vh; }
   .v3d canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; touch-action: none; }
   .v3d.orbit canvas { cursor: grab; } .v3d.orbit canvas:active { cursor: grabbing; }
@@ -312,7 +315,7 @@
   .slot .add { display: grid; justify-items: center; gap: 4px; }
   .slot .add svg { width: 24px; height: 24px; color: var(--chalk); }
   .slot .no { position: absolute; left: 6px; top: 6px; }
-  .slot .x { position: absolute; right: 5px; top: 5px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(22, 32, 27, .75);
+  .slot .x { position: absolute; right: 5px; top: 5px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(27, 42, 37, .75);
              color: #fff; font-size: 15px; line-height: 1; display: grid; place-items: center; }
   .slot .state { position: absolute; inset: auto 0 0 0; padding: 4px 6px; font-size: 10.5px; background: rgba(250, 250, 247, .92); color: var(--ink-2); text-align: left; }
   .slot .state.err { color: var(--brick); }
@@ -330,6 +333,12 @@
   .picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
   .pick { display: flex; align-items: center; gap: 7px; min-height: 52px; padding: 4px 8px 4px 4px; text-align: left; font-size: 12px; font-weight: 600; border-radius: 7px; border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-2); }
   .pick img { width: 32px; height: 42px; flex: none; object-fit: cover; border-radius: 4px; }
+  .pick:disabled { opacity: .45; cursor: not-allowed; }
+  .part-side { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--sheet); }
+  .part-side h4 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .part-side h4 .pill { font-size: 10.5px; }
+  .part-side.back { border-color: var(--tape); background: var(--tape-soft); }
+  .part-side .hint { margin: 0; }
   .pick[aria-checked="true"] { border-color: var(--tape-ink); background: var(--tape-soft); color: var(--tape-ink); box-shadow: inset 0 0 0 1px var(--tape-ink); }
   .prov { display: flex; flex-wrap: wrap; gap: 6px; }
   .prov span { font-size: 12px; background: var(--tape-soft); color: var(--tape-ink); border-radius: 999px; padding: 2px 10px; font-weight: 600; }
@@ -675,7 +684,7 @@
         <div><span class="label">Garment photos</span>
           <div class="slots" id="f-slots"></div>
           <input type="file" id="f-file" accept="image/*" multiple hidden>
-          <p class="hint" id="f-hint" style="margin-top:6px">One photo is enough. Add a second or third only to mix parts, such as the body of one and the sleeves of another. A front view works best. Faces are blurred before sending.</p></div>
+          <p class="hint" id="f-hint" style="margin-top:6px">One photo is enough. Add a second or third only to mix parts, such as the body of one and the sleeves of another, or a front photo plus a back photo (the back gives details like a yoke seam). Put the front photo first. Faces are blurred before sending.</p></div>
         <div id="f-merge" style="display:grid;gap:14px"></div>
       </div>
 
@@ -956,7 +965,7 @@ const GNAME = Object.fromEntries(GARMENTS.map(g => [g.id, g.name]));
 const BASE_MODELS = [...GARMENTS.slice(0, 3), {id: "vest", name: "Vest", sub: "Sleeveless, buttons", icon: "shirt"}, ...GARMENTS.slice(3)];
 const BLOCKS = ["tshirt"];
 const TOP_BASE = {collar: "none", opening: "none", sleeve_length: "short", shoulder: "set_in", fit: "regular", length: "hip",
-                  pockets: 0, cuff: false, contrast_collar: false, contrast_cuff: false};
+                  pockets: 0, cuff: false, contrast_collar: false, contrast_cuff: false, back_yoke: false, back_pleat: false};
 const DEFAULTS = {
   shirt: {part: "top", features: {...TOP_BASE, collar: "shirt_collar", opening: "button_front"}, color: "putih"},
   vest: {part: "top", features: {...TOP_BASE, sleeve_length: "sleeveless", opening: "button_front", neckline: "v", fit: "fitted"}, color: "navy"},
@@ -973,7 +982,7 @@ const PART_LABEL = {top: "Top", bottom: "Bottom", dress: "Dress"};
 const QUICK_KEYS = {bottom: ["silhouette", "length", "hem"], dress: ["sleeve_length", "silhouette", "length", "hem"],
                     block: ["collar", "opening"], top: ["collar", "neckline", "sleeve_length", "sleeve_style", "fit", "length", "shoulder"]};
 const SPEC_KEYS = {bottom: ["silhouette", "length", "hem", "waistband"], dress: ["sleeve_length", "silhouette", "length", "hem", "waist_seam"],
-                   top: ["collar", "neckline", "opening", "sleeve_length", "sleeve_style", "shoulder", "fit", "length", "pockets", "cuff", "elastic_cuff"]};
+                   top: ["collar", "neckline", "opening", "sleeve_length", "sleeve_style", "shoulder", "fit", "length", "pockets", "cuff", "elastic_cuff", "back_yoke", "back_pleat"]};
 const STARTERS = [
   "Women's linen work shirt in sage, pointed collar, short sleeves, one chest pocket",
   "Dusty pink office uniform blouse, fitted, long sleeves",
@@ -988,13 +997,13 @@ const LABELS = {chest: "Chest", bust: "Bust", high_bust: "High bust", waist: "Wa
   back_length: "Back length", apex_height: "Bust point height", apex_distance: "Bust point distance",
   waist_to_hip: "Waist to hip", armhole_depth: "Armhole depth", sleeve_length: "Sleeve length",
   neck_width: "Neck width", bicep: "Bicep", wrist: "Wrist"};
-const GROUPS = {G: "Geometry", S: "Seams, collar & sleeve", W: "Body measurements", D: "Darts", K: "Skirt", N: "Notches", R: "Grainline"};
+const GROUPS = {G: "Geometry", S: "Seams, collar & sleeve", Y: "Back yoke", W: "Body measurements", D: "Darts", K: "Skirt", N: "Notches", R: "Grainline"};
 const EXAMPLES = {tshirt: "chest 100, waist 90, hip 98, shoulder width 45, body length 70, sleeve 21 cm",
                   default: "bust 92, high bust 86, waist 74, hip 98, shoulder 38, back length 39 cm"};
 const FEATURE_LABELS = {kind: "Type", collar: "Collar", neckline: "Neckline", opening: "Opening", sleeve_length: "Sleeve", shoulder: "Shoulder", fit: "Fit",
   length: "Length", pockets: "Pockets", silhouette: "Silhouette", hem: "Hem", cuff: "Cuff", contrast_collar: "Contrast collar",
   contrast_cuff: "Contrast cuff", waistband: "Waistband", waist_seam: "Waist seam", color: "Colour",
-  sleeve_style: "Sleeve style", elastic_cuff: "Elastic cuff", skirt_flare: "Hem flare", skirt_length: "Length"};
+  sleeve_style: "Sleeve style", elastic_cuff: "Elastic cuff", back_yoke: "Back yoke", back_pleat: "Back pleat", skirt_flare: "Hem flare", skirt_length: "Length"};
 const VALUE_LABELS = {none: "None", round: "Round", v: "V", scoop: "Scoop", boat: "Boat", vest: "Vest", shirt_collar: "Pointed", peter_pan: "Peter Pan", band: "Band", other: "Other",
   button_front: "Button front", sleeveless: "Sleeveless", short: "Short", elbow: "Elbow", three_quarter: "3/4", long: "Long",
   set_in: "Set-in", dropped: "Dropped", fitted: "Fitted", regular: "Regular", boxy: "Boxy", waist: "Waist",
@@ -1373,6 +1382,11 @@ $("g-choices").onchange = async e => {
 /* Photos -> one design: each photo is read by Muse Wonder; the user picks which photo
    gives each part; /api/design/merge combines the categories in code (no model). */
 const MAX_PHOTOS = 3;
+const SIDE_LABEL = {front: "Front", back: "Back"};
+// Mix-parts sections: what is seen on the front, on the back, and on both sides (shape, sleeves).
+const BACK_GROUPS = ["kuk", "lipit"];
+const PART_SIDES = [{id: "front", title: "Front of the garment"}, {id: "back", title: "Back of the garment"},
+                    {id: "both", title: "Whole garment (shape & sleeves)"}];
 const photoOk = p => p.status === "ok";
 function renderSlots() {
   const slots = [];
@@ -1381,7 +1395,7 @@ function renderSlots() {
     if (p) {
       const state = p.status === "reading" ? `<span class="state"><span class="spinner" style="width:10px;height:10px;vertical-align:-1px"></span> Reading…</span>`
         : p.status === "err" ? `<span class="state err">Could not be read</span>`
-        : `<span class="state">${p.pieces.map(x => esc(x.plan.label)).join(" + ") || "No garment"}</span>`;
+        : `<span class="state">${SIDE_LABEL[p.side] ? `<b>${SIDE_LABEL[p.side]}</b> · ` : ""}${p.pieces.map(x => esc(x.plan.label)).join(" + ") || "No garment"}</span>`;
       slots.push(`<div class="slot filled"><img src="${p.preview || p.url}" alt="Photo ${i + 1}"><span class="no no-tag">${i + 1}</span>
         <button class="x" data-rm="${i}" aria-label="Remove photo ${i + 1}">×</button>${state}</div>`);
     } else {
@@ -1407,7 +1421,7 @@ async function readPhoto(p) {
   const fd = new FormData(); fd.append("file", p.file);
   try {
     const r = await api("/api/photo", {method: "POST", body: fd});
-    Object.assign(p, {status: "ok", pieces: r.pieces, preview: r.preview, warnings: r.warnings, faces: r.faces_blurred, view: r.photo_view});
+    Object.assign(p, {status: "ok", pieces: r.pieces, preview: r.preview, warnings: r.warnings, faces: r.faces_blurred, view: r.photo_view, side: r.photo_side});
   } catch (e) { Object.assign(p, {status: "err", error: e.html || esc(e)}); }
   if (!S.photos.includes(p)) return;  // removed while reading
   if (S.merge.base === null) pickDefaultTarget();
@@ -1463,7 +1477,9 @@ function targets() {
   return out;
 }
 function pickDefaultTarget() {
-  const t = targets().find(x => x.piece.plan.garment) || targets()[0];
+  // A back-view photo rarely shows the whole design, so the main garment comes from a front photo when there is one.
+  const ts = targets(), side = t => S.photos[t.photo - 1]?.side;
+  const t = ts.find(x => x.piece.plan.garment && side(x) !== "back") || ts.find(x => x.piece.plan.garment) || ts[0];
   Object.assign(S.merge, t ? {base: t.photo, part: t.part, assign: {}} : {base: null, part: null, assign: {}});
 }
 function mergeSources() {
@@ -1473,7 +1489,15 @@ function mergeSources() {
     out[i + 1] = p.pieces.map(x => ({part: x.part, kind: x.kind, features: x.features})); });
   return out;
 }
-const mergeBody = (notes = "") => ({part: S.merge.part, base: S.merge.base, sources: mergeSources(), assign: S.merge.assign,
+/** Front + back: unless the user chose otherwise, the back part comes from a photo of the back. */
+function defaultAssign() {
+  const a = {...S.merge.assign};
+  const back = S.photos.findIndex((p, i) => i + 1 !== S.merge.base && photoOk(p) && p.side === "back"
+    && p.pieces.some(x => x.part === S.merge.part));
+  if (back >= 0 && S.merge.part === "top") BACK_GROUPS.forEach(id => { if (!(id in a)) a[id] = back + 1; });
+  return a;
+}
+const mergeBody = (notes = "") => ({part: S.merge.part, base: S.merge.base, sources: mergeSources(), assign: defaultAssign(),
                                     color: S.merge.result?.color || "broken_white", notes});
 async function refreshMerge() {
   S.merge.error = "";
@@ -1499,12 +1523,7 @@ function renderMergePanel() {
       <span class="no">${t.photo}</span>${t.piece.plan.garment ? `<svg><use href="#g-${t.piece.plan.garment}"/></svg>` : ""}
       <span>${esc(PART_LABEL[t.part])}: ${esc(t.piece.plan.label)}</span>
       ${t.piece.plan.garment ? "" : `<span class="pill fail" style="margin-left:auto">not supported yet</span>`}</button>`).join("")}</div></div>`;
-  // Only parts where the photos really differ are asked; each button says what that photo would give.
-  const rows = r ? r.groups.filter(g => new Set(g.sources.map(n => partValue(g, n))).size > 1) : [];
-  const partsHtml = rows.length ? `<div><span class="label">Mix parts (optional)</span><div class="parts">${rows.map(g =>
-    `<div class="part-row" role="radiogroup" aria-label="${esc(g.label)} taken from"><span>${esc(g.label)}</span>
-      <div class="picks">${g.sources.map(n => `<button class="pick" role="radio" data-g="${g.id}" data-n="${n}" aria-checked="${g.chosen === n}"
-        aria-label="${esc(g.label)} from photo ${n}"><img src="${thumbs(n)}" alt=""><span>${esc(partValue(g, n))}</span></button>`).join("")}</div></div>`).join("")}</div></div>` : "";
+  const partsHtml = r ? mixPartsHtml(r, thumbs) : "";
   const planHtml = r && (!r.plan.garment || r.plan.notes.length) ? `<div class="plan-box"><div class="row">${r.plan.garment ? `<svg><use href="#g-${r.plan.garment}"/></svg>` : icon("i-info")}
       <b>${r.plan.garment ? "Good to know" : `${esc(r.plan.label)} cannot be drafted yet`}</b></div>${r.plan.notes.length ? `<ul class="notes">${r.plan.notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}</div>` : "";
   el.innerHTML = `${errs}${targetHtml}${partsHtml}${planHtml}
@@ -1512,6 +1531,33 @@ function renderMergePanel() {
     ${r ? `<details class="more" ${m.notes ? "open" : ""}><summary>Add a note (optional)</summary>
       <textarea id="f-notes" aria-label="Note" maxlength="300" style="min-height:60px" placeholder="Example: make the collar a contrast colour">${esc(m.notes)}</textarea></details>
       <button class="go" id="f-go" ${r.plan.garment ? "" : "disabled"}>${icon("i-check")}<span>Use this design →</span></button>` : ""}`;
+}
+/** Mix parts in three sections (front, back, whole garment); each button says what that photo would give.
+    A photo of the back cannot give front details and a photo of the front cannot give back details. */
+function mixPartsHtml(r, thumbs) {
+  const usable = S.photos.filter(photoOk).length, m = S.merge;
+  const hidden = (g, n) => {
+    const side = S.photos[n - 1]?.side;
+    if (n === m.base) return "";
+    if (g.side === "front" && side === "back") return "Not seen on a back photo";
+    if (g.side === "back" && side === "front") return "Not seen on a front photo";
+    return "";
+  };
+  const row = g => `<div class="part-row" role="radiogroup" aria-label="${esc(g.label)} taken from"><span>${esc(g.label)}</span>
+      <div class="picks">${g.sources.map(n => { const why = hidden(g, n);
+        return `<button class="pick" role="radio" data-g="${g.id}" data-n="${n}" aria-checked="${g.chosen === n}" ${why ? `disabled title="${why}"` : ""}
+        aria-label="${esc(g.label)} from photo ${n}"><img src="${thumbs(n)}" alt=""><span>${esc(why || partValue(g, n))}</span></button>`; }).join("")}</div></div>`;
+  const sections = PART_SIDES.map(sd => {
+    const groups = r.groups.filter(g => (g.side || "both") === sd.id);
+    if (!groups.length) return "";
+    const from = [...new Set(groups.map(g => g.chosen))];
+    const tag = `<span class="pill">${from.length === 1 ? `photo ${from[0]}${SIDE_LABEL[S.photos[from[0] - 1]?.side] ? " · " + SIDE_LABEL[S.photos[from[0] - 1].side] : ""}` : "mixed"}</span>`;
+    const body = usable > 1 ? groups.map(row).join("")
+      : `<p class="hint">${groups.map(g => `${esc(g.label)}: <b>${esc(partValue(g, g.chosen))}</b>`).join(" · ")}</p>`
+        + (sd.id === "back" ? `<p class="hint">Add a photo of the back to take the yoke and pleat from it.</p>` : "");
+    return `<div class="part-side ${sd.id}"><h4>${sd.title} ${tag}</h4>${body}</div>`;
+  }).join("");
+  return `<div><span class="label">${usable > 1 ? "Mix parts: choose which photo gives each part" : "Parts of the garment"}</span><div class="parts">${sections}</div></div>`;
 }
 /** What photo n would give for a part, in the words shown on its button. */
 function partValue(g, n) {
@@ -1553,7 +1599,7 @@ async function finishMerge() {
 }
 function provHtml(d) {
   if (!d.provenance || !d.groups || new Set(Object.values(d.provenance)).size < 2) return "";
-  return `<div class="prov">${d.groups.map(g => `<span>${esc(g.label)} ← photo ${d.provenance[g.id]}</span>`).join("")}</div>`;
+  return `<div class="prov">${d.groups.map(g => `<span>${g.side === "back" ? "Back · " : g.side === "front" ? "Front · " : ""}${esc(g.label)} ← photo ${d.provenance[g.id]}</span>`).join("")}</div>`;
 }
 function compareHtml() {
   const r = S.merge.result, used = r ? [...new Set(r.groups.map(g => g.chosen))].sort((a, b) => a - b) : [];
@@ -1564,7 +1610,7 @@ function compareHtml() {
       ${previewHtml(r.plan, "Preview of your design", {controls: true})}
       ${r.plan.garment ? PV_CAPTION : ""}
       <div class="made-from"><span>Made from</span>${used.map(n => `<img src="${S.photos[n - 1].preview || S.photos[n - 1].url}" alt="Photo ${n}">`).join("")}</div>
-      ${mixed ? `<div class="prov">${r.groups.map(g => `<span>${esc(g.label)} ← photo ${g.chosen}</span>`).join("")}</div>` : ""}
+      ${mixed ? `<div class="prov">${r.groups.map(g => `<span>${g.side === "back" ? "Back · " : g.side === "front" ? "Front · " : ""}${esc(g.label)} ← photo ${g.chosen}</span>`).join("")}</div>` : ""}
       ${aiCompareHtml(mergeSketch())}</div>`;
 }
 renderSlots();

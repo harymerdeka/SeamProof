@@ -57,6 +57,7 @@ STYLE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "photo_view": {"type": "string"},
+        "photo_side": {"type": "string"},
         "pieces": {"type": "array", "items": {
             "type": "object",
             "properties": {
@@ -84,6 +85,7 @@ SYSTEM_PROMPT = (
 )
 USER_PROMPT = (
     "List every garment piece visible. JSON: {\"photo_view\": \"worn|flat_lay|other\", "
+    "\"photo_side\": \"front|back|other\" (which side of the garment the photo shows), "
     "\"pieces\": [{\"part\": \"top|bottom|dress\", \"kind\": ..., \"features\": {...}, "
     "\"evidence\": \"short visual reason in English\"}]}.\n"
     "A dress (one garment from shoulder to hem, including shirt dresses) is ONE piece with "
@@ -91,7 +93,11 @@ USER_PROMPT = (
     f"Top kinds: {'|'.join(TOP_KINDS)}. Top features — {_options(TOP_FEATURES)}; "
     "pockets: 0|1|2 (visible chest/patch pockets); cuff: true|false (turned-up or band cuff); "
     "elastic_cuff: true|false (cuff gathered on elastic / ruched); "
-    "contrast_collar: true|false; contrast_cuff: true|false.\n"
+    "contrast_collar: true|false; contrast_cuff: true|false; "
+    "back_yoke: true|false (a horizontal seam straight across the upper back below the collar; "
+    "false when the back is not visible); back_pleat: true|false (a box or inverted pleat at centre back "
+    "below the yoke).\n"
+    "On a photo of the back, report what the back shows; front details you cannot see keep their first value.\n"
     f"Bottom kinds: {'|'.join(BOTTOM_KINDS)}. Bottom features — {_options(BOTTOM_FEATURES)}; "
     "waistband: true|false.\n"
     f"Dress kinds: {'|'.join(DRESS_KINDS)}. Dress features — {_options(DRESS_FEATURES)}; "
@@ -129,6 +135,8 @@ class StyleReading:
     pieces: list[GarmentPiece] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     source: str = "wonder"
+    # Which side of the garment the photo shows (front|back|other).
+    photo_side: str = "other"
 
 
 def prepare_photo(data: bytes) -> PreparedPhoto:
@@ -206,7 +214,7 @@ def validate_reading(raw: dict[str, Any]) -> StyleReading:
                 warnings.append(f"Unknown {part}.{key}='{value}' — using '{allowed[0]}'.")
                 value = allowed[0]
             features[key] = value
-        flags = {"top": ("cuff", "elastic_cuff", "contrast_collar", "contrast_cuff"), "bottom": ("waistband",),
+        flags = {"top": ("cuff", "elastic_cuff", "contrast_collar", "contrast_cuff", "back_yoke", "back_pleat"), "bottom": ("waistband",),
                  "dress": ("waist_seam", "cuff", "elastic_cuff", "contrast_collar", "contrast_cuff")}[part]
         for key in flags:
             features[key] = bool(_bool(given.get(key)))
@@ -216,8 +224,14 @@ def validate_reading(raw: dict[str, Any]) -> StyleReading:
                 warnings.append(f"Invalid pocket count '{pockets}' — using 0.")
                 pockets = 0
             features["pockets"] = int(pockets)
+        if (features.get("collar") == "shirt_collar" and features.get("opening") == "button_front"
+                and features.get("neckline") == "v"):
+            # Assumption: on a collared button-front garment the "V" a photo shows is
+            # the collar worn open, not a V-cut neckline; the drafted collar is the same.
+            features["neckline"] = "round"
         pieces.append(GarmentPiece(part, kind, features, str(item.get("evidence", ""))[:200]))
-    return StyleReading(view, pieces, warnings)
+    side = str(raw.get("photo_side", "other"))
+    return StyleReading(view, pieces, warnings, photo_side=side if side in ("front", "back") else "other")
 
 
 def describe_garments(photo: PreparedPhoto,

@@ -27,14 +27,14 @@ PANEL_ID = {"front": "front bodice", "back": "back bodice", "sleeve": "sleeve", 
             "collar": "collar", "cuff": "cuff", "pocket": "pocket", "neckband": "neckband",
             "skirt_front": "front skirt", "skirt_back": "back skirt", "hem_facing": "hem facing",
             "waist_facing": "waist facing", "waistband": "waistband",
-            "armhole_bias": "armhole bias", "neck_bias": "neck bias"}
+            "armhole_bias": "armhole bias", "neck_bias": "neck bias", "yoke": "back yoke"}
 SKIRT_PANEL_ID = {"front": "front skirt", "back": "back skirt"}
 EDGE_ID = {"shoulder": "shoulder", "side_upper": "upper side", "side_lower": "lower side", "side_low": "lower side",
            "side": "side", "armhole": "armhole", "cap": "sleeve cap", "neckline": "neckline",
            "neck": "neck", "underarm_front": "underarm seam", "underarm_back": "underarm seam",
            "waist_cf": "waist", "waist_side": "waist", "hem": "hem", "scallop": "scallop hem",
            "attach": "joining edge", "cuff_join": "sleeve hem", "edge": "front edge", "slit": "slit",
-           "cb": "centre back", "collar_line": "collar line",
+           "cb": "centre back", "collar_line": "collar line", "seam": "yoke seam", "yoke_seam": "yoke seam",
            "dart_leg1": "dart leg", "dart_leg2": "dart leg",
            "wdart_leg1": "waist dart leg", "wdart_leg2": "waist dart leg"}
 # How a finish piece is sewn on, in words (no numbers), so Muse orders the steps right.

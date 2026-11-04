@@ -87,6 +87,13 @@ def _shirt(f: dict[str, Any], notes: list[str]) -> dict[str, float]:
     v_neck = _v_neck(f, bool(collar), notes)
     if not collar:
         notes.append("The collarless neck is finished with bias.")
+    if f.get("back_pleat") and not f.get("back_yoke"):
+        notes.append("A back pleat hangs from a yoke — a back yoke was added.")
+        f = {**f, "back_yoke": True}
+    if f.get("back_yoke"):
+        notes.append("Back yoke: a straight seam across the upper back (about 75 mm below the back neck); the yoke is cut double.")
+    if f.get("back_pleat"):
+        notes.append("Back pleat: a centre-back box pleat (60 mm in total) stitched into the yoke seam, open below.")
     if sleeveless:
         return _vest(f, notes, float(collar), v_neck)
     sleeve_params = _cuffed_sleeve(f, notes)
@@ -101,7 +108,14 @@ def _shirt(f: dict[str, Any], notes: list[str]) -> dict[str, float]:
         "pocket_count": float(int(f.get("pockets", 0))),
         "neck_drop_back": 20.0,
         "neck_v": 1.0 if v_neck else 0.0,
+        **_back_params(f),
     }
+
+
+def _back_params(f: dict[str, Any]) -> dict[str, float]:
+    """Back yoke and pleat switches; a pleat always comes with its yoke."""
+    pleat = bool(f.get("back_pleat"))
+    return {"back_yoke": 1.0 if f.get("back_yoke") or pleat else 0.0, "back_pleat": 1.0 if pleat else 0.0}
 
 
 def _cuffed_sleeve(f: dict[str, Any], notes: list[str]) -> dict[str, float]:
@@ -166,6 +180,8 @@ def _darted(kind: str, f: dict[str, Any], notes: list[str]) -> dict[str, float]:
         notes.append(f"Pockets on a {kind} are not supported yet — choose a shirt for pockets.")
     if f.get("contrast_cuff"):
         notes.append("Contrast fabric for the cuff — the production marker still uses one fabric.")
+    if f.get("back_yoke") or f.get("back_pleat"):
+        notes.append(f"A back yoke or pleat on a {kind} is not supported yet — choose a shirt for a yoked back.")
     if kind == "tunic":
         if f.get("length") in ("waist", "high_hip"):
             notes.append("A tunic reaches at least the hip — cut to hip length.")
@@ -210,6 +226,7 @@ def _vest(f: dict[str, Any], notes: list[str], collar: float, v_neck: bool) -> d
         "neck_drop_back": 20.0,
         "sleeveless": 1.0,
         "neck_v": 1.0 if v_neck else 0.0,
+        **_back_params(f),
     }
 
 

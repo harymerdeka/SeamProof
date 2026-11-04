@@ -46,6 +46,8 @@ SKIRT_HEM_Y = {"mini": 140.0, "above_knee": 165.0, "knee": 195.0, "midi": 235.0,
 SKIRT_HEM_HALF = {"straight": 54.0, "a_line": 70.0, "flared": 94.0}
 DRESS_WAIST_Y = 136.0
 DRESS_HEM_Y = {"mini": 200.0, "above_knee": 226.0, "knee": 252.0, "midi": 282.0, "maxi": 308.0}
+# Back yoke seam height in the flat (about a third of the way from shoulder to armpit).
+YOKE_Y = 54.0
 # View height per part: a dress runs longest (maxi hem at 308).
 VIEW_H = {"top": 290.0, "bottom": 300.0, "dress": 330.0}
 
@@ -115,6 +117,9 @@ def drafted_features(plan: StylePlan) -> dict[str, Any]:
                  pockets=0, shoulder="set_in", fit="regular")
     if plan.garment not in ("shirt", "dress", "blouse", "tunic"):
         f["neckline"] = "round"
+    # Mirrors style: only the shirt block drafts a back yoke.
+    f["back_pleat"] = plan.garment == "shirt" and bool(f.get("back_pleat"))
+    f["back_yoke"] = plan.garment == "shirt" and (bool(f.get("back_yoke")) or f["back_pleat"])
     return f
 
 
@@ -255,6 +260,16 @@ def _top(f: dict[str, Any], kind: str, back: bool) -> list[str]:
              (CX + waist_half, (ARMPIT_Y + hem_y) / 2 - 8), (CX + hem_half, hem_y)]
     body = right + [(2 * CX - x, y) for x, y in reversed(right)]
     out.append(f'<polygon class="fill" points="{_pts(body)}"/>')
+    if back and f.get("back_yoke"):
+        # Straight yoke seam across the back, armhole to armhole.
+        t = (YOKE_Y - shoulder_y) / (ARMPIT_Y - shoulder_y)
+        x = shoulder_x + (CX + half - shoulder_x) * t
+        out.append(f'<line class="detail" x1="{2 * CX - x:.1f}" y1="{YOKE_Y:.1f}" x2="{x:.1f}" y2="{YOKE_Y:.1f}"/>')
+        if f.get("back_pleat"):
+            # Box pleat folds meeting at CB under the yoke, falling open below.
+            for sign in (1, -1):
+                out.append(f'<line class="detail" x1="{CX + sign * 1.5:.1f}" y1="{YOKE_Y:.1f}" '
+                           f'x2="{CX + sign * 6:.1f}" y2="{(YOKE_Y + hem_y) / 2:.1f}"/>')
     if not sleeve:
         for side in (1, -1):
             line = _armhole_line(shoulder_x, shoulder_y, half)

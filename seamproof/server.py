@@ -456,6 +456,7 @@ def photo(file: UploadFile = File(...)) -> dict[str, Any]:
         "faces_blurred": prepared.faces_blurred,
         "preview": "data:image/jpeg;base64," + base64.b64encode(prepared.jpeg).decode("ascii"),
         "photo_view": reading.photo_view,
+        "photo_side": reading.photo_side,
         "warnings": reading.warnings,
         "pieces": [{"part": piece.part, "kind": piece.kind, "features": piece.features,
                     "evidence": piece.evidence,

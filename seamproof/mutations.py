@@ -507,6 +507,29 @@ def m_grainline(pattern: Pattern) -> Pattern:
     return clone
 
 
+def _yoke() -> Pattern:
+    """Return the pristine M shirt with a back yoke (sample-photo style)."""
+    return draft_shirt(WOMEN_SIZE_TABLE["M"], "woven", dict(SHIRT_STYLE, back_yoke=1))
+
+
+def m_yoke_seam(pattern: Pattern) -> Pattern:
+    """Push the lower back's armhole end of the yoke seam out 3 mm, so it outgrows the yoke."""
+    return _move_corner(pattern, "back", "back.yoke_seam", "back.armhole", Point(3, 0))
+
+
+def _pleat() -> Pattern:
+    """Return the pristine M yoked shirt with a centre-back box pleat."""
+    return draft_shirt(WOMEN_SIZE_TABLE["M"], "woven", dict(SHIRT_STYLE, back_yoke=1, back_pleat=1))
+
+
+def m_pleat_notch(pattern: Pattern) -> Pattern:
+    """Drop the pleat notch on the yoke seam, so the pleat line is no longer marked."""
+    clone = copy.deepcopy(pattern)
+    back = clone.panels[_index(clone, "back")]
+    back.notches = [n for n in back.notches if n.edge_id != "back.yoke_seam"]
+    return clone
+
+
 Mutator = Callable[[Pattern], Pattern]
 
 MUTATIONS: list[tuple[str, str, str, Mutator]] = [
@@ -553,11 +576,13 @@ MUTATIONS: list[tuple[str, str, str, Mutator]] = [
     ("S10", "vest", "Armhole bias shortened 5 mm", m_armhole_bias),
     ("S11", "vest", "Neck bias lengthened 5 mm", m_neck_bias),
     ("S3", "blouse", "Blouse sleeve panel removed", m_lost_sleeve),
+    ("Y1", "yoke", "Lower back yoke seam widened 3 mm", m_yoke_seam),
+    ("Y2", "pleat", "Back pleat notch removed from the yoke seam", m_pleat_notch),
 ]
 
 BASES: dict[str, Callable[[], Pattern]] = {"blouse": _blouse, "tshirt": _tshirt, "shirt": _shirt, "skirt": _skirt,
                                            "dress": _dress, "bishop": _bishop,
-                                           "vest": _vest}
+                                           "vest": _vest, "yoke": _yoke, "pleat": _pleat}
 
 
 def run_mutation_report() -> list[tuple[str, str, set[str]]]:

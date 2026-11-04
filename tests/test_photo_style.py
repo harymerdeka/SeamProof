@@ -77,6 +77,20 @@ def test_reading_coerces_unknown_values_with_warnings() -> None:
     assert len(reading.warnings) == 4
 
 
+@pytest.mark.parametrize("collar,opening,expected", [("shirt_collar", "button_front", "round"),
+                                                     ("none", "button_front", "v"),
+                                                     ("shirt_collar", "none", "v")])
+def test_open_shirt_collar_is_not_read_as_a_v_neck(collar: str, opening: str, expected: str) -> None:
+    """A collared button-front shirt worn open is a collared neck; other V readings stay V."""
+    reading = validate_reading({"pieces": [{"part": "top", "kind": "shirt", "features": {
+        "collar": collar, "opening": opening, "neckline": "v"}}]})
+    piece = reading.pieces[0]
+    assert piece.features["neckline"] == expected and not reading.warnings
+    if expected == "round":
+        plan = plan_piece(piece.part, piece.kind, piece.features)
+        assert not any("V neck" in note for note in plan.notes)
+
+
 def test_sample_reading_maps_to_shirt_and_skirt() -> None:
     """The sample photo plans a boxy shirt with collar/cuffs/pockets and a scallop skirt."""
     reading = describe_garments(prepare_photo(_jpeg()))

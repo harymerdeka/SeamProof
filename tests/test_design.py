@@ -214,7 +214,7 @@ def test_merge_takes_each_part_from_its_photo() -> None:
     f = merged.piece.features
     assert merged.piece.kind == "shirt" and f["fit"] == "boxy" and f["pockets"] == 2
     assert f["sleeve_length"] == "long" and f["cuff"] is True and f["collar"] == "peter_pan"
-    assert merged.provenance == {"siluet": 1, "badan": 1, "lengan": 2, "kerah": 2}
+    assert merged.provenance == {"siluet": 1, "badan": 1, "lengan": 2, "kerah": 2, "kuk": 1, "lipit": 1}
     assert merged.plan.garment == "shirt" and merged.plan.params["collar_style"] == 2
 
 

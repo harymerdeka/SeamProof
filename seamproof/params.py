@@ -39,6 +39,9 @@ def _panel(name: str, *edges: str) -> list[tuple[str, str]]:
 SHIRT_SLEEVE = _panel("sleeve", "cap", "underarm_front", "underarm_back", "hem", "cuff_join")
 SHIRT_CUFF = _panel("cuff", "attach", "end_r", "outer", "end_l")
 SHIRT_COLLAR = _panel("collar", "neck", "end", "outer", "fold")
+# A yoked shirt back: the yoke takes the neck, shoulder and top of the armhole.
+YOKE = _panel("yoke", "neckline", "shoulder", "armhole", "seam", "fold")
+BACK_YOKE = _panel("back", "neckline", "shoulder", "armhole", "fold", "yoke_seam") + YOKE
 SKIRT_BODY = ("waist_cf", "dart_leg1", "dart_leg2", "waist_side", "side", "hem", "scallop")
 HEM_FACING = _panel("hem_facing", "scallop", "side_r", "top", "fold")
 WAIST_FINISH = (_panel("waistband", "attach", "end_r", "outer", "end_l")
@@ -81,6 +84,8 @@ PARAMETERS: dict[str, ParameterSpec] = {
     "sleeve_cap_gather": ParameterSpec(0, 0, 90, "mm", "Extra sleeve cap length gathered into the armhole (puff shoulder)", SHIRT_SLEEVE + SHIRT_CUFF, tunable=False),
     "cuff_elastic": ParameterSpec(0, 0, 1, "", "1 makes a fitted elastic casing cuff that slides over the hand", SHIRT_SLEEVE + SHIRT_CUFF, integer=True, tunable=False),
     "pocket_count": ParameterSpec(0, 0, 2, "", "Patch chest pockets on the front", _panel("pocket", "hem", "side_r", "bottom", "side_l"), integer=True, tunable=False),
+    "back_yoke": ParameterSpec(0, 0, 1, "", "1 cuts the shirt back into a yoke and a lower back along a horizontal seam", BACK_YOKE, integer=True, tunable=False),
+    "back_pleat": ParameterSpec(0, 0, 1, "", "1 adds a centre-back box pleat under the yoke (needs back_yoke)", _panel("back", "yoke_seam", "hem", "fold"), integer=True, tunable=False),
     "placket_width": ParameterSpec(20, 15, 30, "mm", "Button extension past centre front", [("front", "front.edge"), ("front", "front.ext_top"), ("front", "front.hem")], tunable=False),
     # Skirt style parameters.
     "skirt_length": ParameterSpec(480, 300, 1000, "mm", "Skirt length from the waist seam", [(p, f"{p}.{e}") for p in ("front", "back") for e in ("side", "hem", "scallop", "fold")] + HEM_FACING, tunable=False),
@@ -159,7 +164,7 @@ GARMENT_PARAMS: dict[str, list[str]] = {
     "shirt": ["armhole_curve_depth", "shoulder_slope", "neckline_depth_front", "neck_drop_back",
               "neckline_width", "design_ease", "shoulder_drop", "shirt_length", "shirt_sleeve_length",
               "collar_style", "collar_width", "cuff_depth", "pocket_count", "placket_width",
-              "sleeve_hem_fullness", "sleeve_cap_gather", "cuff_elastic", "sleeveless", "neck_v"],
+              "sleeve_hem_fullness", "sleeve_cap_gather", "cuff_elastic", "sleeveless", "neck_v", "back_yoke", "back_pleat"],
     "dress": ["armhole_curve_depth", "sleeve_cap_height", "shoulder_slope", "bust_dart_clearance",
               "bust_dart_angle", "back_waist_dart_intake", "neckline_depth_front", "neckline_width",
               "skirt_length", "skirt_flare", "skirt_hip_ease", "scallop_depth", "scallop_width",
@@ -190,3 +195,18 @@ def resolve_params(overrides: Mapping[str, float] | None = None) -> dict[str, fl
             raise ValueError(f"{name} must be a whole number")
         result[name] = float(value)
     return result
+
+
+def _yoke_twins(affects: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """On a yoked shirt the back neck, shoulder and top armhole live on the yoke."""
+    twins = {"back.neckline": ["yoke.neckline"], "back.shoulder": ["yoke.shoulder"],
+             "back.armhole": ["yoke.armhole", "yoke.seam", "back.yoke_seam"],
+             "back.fold": ["yoke.fold"]}
+    return [("yoke" if e.startswith("yoke") else "back", e) for _p, edge in affects for e in twins.get(edge, [])]
+
+
+# Every shirt parameter that moves a back edge also moves its yoke twin when the back is yoked.
+for _name in GARMENT_PARAMS["shirt"]:
+    _extra = _yoke_twins(PARAMETERS[_name].affects + GARMENT_AFFECTS["shirt"].get(_name, []))
+    if _extra:
+        GARMENT_AFFECTS["shirt"][_name] = GARMENT_AFFECTS["shirt"].get(_name, []) + _extra

@@ -75,5 +75,5 @@ def test_mutation_report_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest
     monkeypatch.setattr(sys, "argv", ["seamproof", "mutation-report"])
     assert main() == 0
     out = capsys.readouterr().out
-    assert "Caught: 43/43" in out
+    assert "Caught: 45/45" in out
     assert "| G1 |" in out and "| R1 |" in out
