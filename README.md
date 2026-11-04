@@ -114,3 +114,8 @@ exactly that check must fail.
 
 Landing photos: CC0 (see `seamproof/static/landing/CREDITS.txt`). three.js: MIT
 (`seamproof/static/three-LICENSE.txt`).
+
+## License
+
+Open source under the [MIT License](LICENSE). Bundled third-party files keep their own
+licenses: three.js (MIT) and the CC0 landing photos listed in `CREDITS.txt`.
