@@ -64,7 +64,7 @@ def test_defaults_pass_every_check(draft, size: str) -> None:
     report = verify_pattern(draft(WOMEN_SIZE_TABLE[size], "woven"))
     assert report.passed
     assert {check.id for check in report.checks} == BLOUSE_IDS
-    assert report.summary_id().startswith("LULUS")
+    assert report.summary_id().startswith("PASS")
 
 
 @pytest.mark.parametrize("fabric", ["knit_low_stretch", "knit_high_stretch"])
@@ -80,7 +80,7 @@ def test_tshirt_negative_ease_is_reported() -> None:
     """Size M knit_low has -1.3 mm cap ease, so exactly S3 must fail."""
     report = verify_pattern(draft_tshirt(SIZE_TABLE["M"], "knit_low_stretch"))
     _only(report, "S3")
-    assert "di luar rentang" in report.failures()[0].message_id
+    assert "outside the" in report.failures()[0].message_id
 
 
 def test_variants_pass() -> None:
@@ -333,9 +333,9 @@ def test_mutation_tilts_grainline(blouse_m: Pattern) -> None:
 def test_report_summary_and_ids(blouse_m: Pattern) -> None:
     """Summaries speak Indonesian; failures name their checks."""
     good = verify_pattern(blouse_m)
-    assert good.passed and good.summary_id().startswith("LULUS")
+    assert good.passed and good.summary_id().startswith("PASS")
     clone = copy.deepcopy(blouse_m)
     clone.params["x"] = 1
     bad = verify_pattern(clone)
-    assert not bad.passed and bad.summary_id().startswith("GAGAL")
+    assert not bad.passed and bad.summary_id().startswith("FAIL")
     assert bad.failures()[0].id == "G2"

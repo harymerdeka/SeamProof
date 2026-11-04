@@ -39,6 +39,9 @@ def _panel(name: str, *edges: str) -> list[tuple[str, str]]:
 SHIRT_SLEEVE = _panel("sleeve", "cap", "underarm_front", "underarm_back", "hem", "cuff_join")
 SHIRT_CUFF = _panel("cuff", "attach", "end_r", "outer", "end_l")
 SHIRT_COLLAR = _panel("collar", "neck", "end", "outer", "fold")
+# A yoked shirt back: the yoke takes the neck, shoulder and top of the armhole.
+YOKE = _panel("yoke", "neckline", "shoulder", "armhole", "seam", "fold")
+BACK_YOKE = _panel("back", "neckline", "shoulder", "armhole", "fold", "yoke_seam") + YOKE
 SKIRT_BODY = ("waist_cf", "dart_leg1", "dart_leg2", "waist_side", "side", "hem", "scallop")
 HEM_FACING = _panel("hem_facing", "scallop", "side_r", "top", "fold")
 WAIST_FINISH = (_panel("waistband", "attach", "end_r", "outer", "end_l")
@@ -46,6 +49,8 @@ WAIST_FINISH = (_panel("waistband", "attach", "end_r", "outer", "end_l")
 
 DRESS_WAIST = _body_edges("waist_side", "wdart_leg1", "wdart_leg2", "waist_cf")
 DRESS_SKIRT = [(p, f"{p}.{e}") for p in ("skirt_front", "skirt_back") for e in SKIRT_BODY + ("fold",)]
+ARMHOLE_BIAS = _panel("armhole_bias", "attach", "end_r", "outer", "end_l")
+NECK_BIAS = _panel("neck_bias", "attach", "end_r", "outer", "end_l")
 BAND_EDGES = [("neckband", f"neckband.{name}") for name in ("attach", "end_right", "attach_inner", "end_left")]
 # Assumptions: shoulder_slope is a vertical drop, not an angle; curve depth is
 # a lateral control-point inset. Limits are provisional workshop tuning bounds.
@@ -72,13 +77,15 @@ PARAMETERS: dict[str, ParameterSpec] = {
     "shoulder_drop": ParameterSpec(0, 0, 90, "mm", "Shoulder seam extension past the shoulder point (dropped shoulder)", _body_edges("shoulder", "armhole", "side") + SHIRT_SLEEVE, tunable=False),
     "shirt_length": ParameterSpec(180, 0, 450, "mm", "Shirt hem below the waist line", _body_edges("side", "hem") + [("front", "front.edge"), ("back", "back.fold")], tunable=False),
     "shirt_sleeve_length": ParameterSpec(250, 80, 650, "mm", "Finished shirt sleeve length from the armhole seam, cuff included", SHIRT_SLEEVE, tunable=False),
-    "collar_style": ParameterSpec(2, 0, 2, "", "Collar type: 0 none, 1 flat pointed collar, 2 peter pan", SHIRT_COLLAR, integer=True, tunable=False),
+    "collar_style": ParameterSpec(2, 0, 3, "", "Collar type: 0 none, 1 flat pointed collar, 2 peter pan, 3 band", SHIRT_COLLAR, integer=True, tunable=False),
     "collar_width": ParameterSpec(65, 40, 100, "mm", "Finished collar width from the neck seam", SHIRT_COLLAR, tunable=False),
     "cuff_depth": ParameterSpec(0, 0, 60, "mm", "Finished turned-up cuff depth; 0 sews a plain hem", SHIRT_SLEEVE + SHIRT_CUFF, tunable=False),
     "sleeve_hem_fullness": ParameterSpec(0, 0, 300, "mm", "Extra sleeve hem width gathered into the cuff (bishop sleeve); 0 is straight", SHIRT_SLEEVE + SHIRT_CUFF, tunable=False),
     "sleeve_cap_gather": ParameterSpec(0, 0, 90, "mm", "Extra sleeve cap length gathered into the armhole (puff shoulder)", SHIRT_SLEEVE + SHIRT_CUFF, tunable=False),
     "cuff_elastic": ParameterSpec(0, 0, 1, "", "1 makes a fitted elastic casing cuff that slides over the hand", SHIRT_SLEEVE + SHIRT_CUFF, integer=True, tunable=False),
     "pocket_count": ParameterSpec(0, 0, 2, "", "Patch chest pockets on the front", _panel("pocket", "hem", "side_r", "bottom", "side_l"), integer=True, tunable=False),
+    "back_yoke": ParameterSpec(0, 0, 1, "", "1 cuts the shirt back into a yoke and a lower back along a horizontal seam", BACK_YOKE, integer=True, tunable=False),
+    "back_pleat": ParameterSpec(0, 0, 1, "", "1 adds a centre-back box pleat under the yoke (needs back_yoke)", _panel("back", "yoke_seam", "hem", "fold"), integer=True, tunable=False),
     "placket_width": ParameterSpec(20, 15, 30, "mm", "Button extension past centre front", [("front", "front.edge"), ("front", "front.ext_top"), ("front", "front.hem")], tunable=False),
     # Skirt style parameters.
     "skirt_length": ParameterSpec(480, 300, 1000, "mm", "Skirt length from the waist seam", [(p, f"{p}.{e}") for p in ("front", "back") for e in ("side", "hem", "scallop", "fold")] + HEM_FACING, tunable=False),
@@ -90,30 +97,53 @@ PARAMETERS: dict[str, ParameterSpec] = {
     # Dress style switches, mapped from photo categories like the shirt ones.
     "dress_waist_seam": ParameterSpec(1, 0, 1, "", "1 joins bodice and skirt at the waist; 0 drafts a one-piece shift dress", _body_edges("side_lower", "side_low", "hem", "fold") + DRESS_WAIST + DRESS_SKIRT, integer=True, tunable=False),
     "dress_sleeve_length": ParameterSpec(570, 150, 650, "mm", "Dress sleeve length below the crown; capped at the measured arm length", _panel("sleeve", "underarm_front", "underarm_back", "hem"), tunable=False),
+    "blouse_sleeve_length": ParameterSpec(650, 150, 650, "mm", "Blouse or tunic plain sleeve length below the crown; capped at the measured arm length", _panel("sleeve", "underarm_front", "underarm_back", "hem"), tunable=False),
+    # Finishes shared by shirt and dress (see seamproof.draft.finish).
+    "sleeveless": ParameterSpec(0, 0, 1, "", "1 drafts no sleeve: armhole raised, shoulder cut in, armholes bound with bias", _body_edges("shoulder", "armhole", "side", "side_upper", "side_lower", "side_low") + SHIRT_SLEEVE + SHIRT_CUFF + ARMHOLE_BIAS, integer=True, tunable=False),
+    "neck_v": ParameterSpec(0, 0, 1, "", "1 makes the front neckline a straight V to centre front (no collar)", [("front", "front.neckline"), ("front", "front.fold"), ("front", "front.ext_top"), ("front", "front.edge")] + _facing_edges() + NECK_BIAS, integer=True, tunable=False),
 }
 
 # Extra edges a shared parameter moves in one garment only. Locality adds
 # these for that garment, so other garments keep their tighter allowlists.
 # Assumption: the shirt sleeve cap is solved against the armhole and the
 # collar is traced from the necklines, so armhole/neck params reach them.
+DARTED_AFFECTS: dict[str, list[tuple[str, str]]] = {
+    "armhole_curve_depth": SHIRT_SLEEVE + SHIRT_CUFF + ARMHOLE_BIAS,
+    "shoulder_slope": SHIRT_SLEEVE + SHIRT_CUFF + ARMHOLE_BIAS,
+    "neckline_width": SHIRT_SLEEVE + SHIRT_CUFF + ARMHOLE_BIAS,
+    "back_waist_dart_intake": SHIRT_SLEEVE + SHIRT_CUFF + ARMHOLE_BIAS,
+    "sleeve_cap_height": _panel("sleeve", "hem"),
+}
 GARMENT_AFFECTS: dict[str, dict[str, list[tuple[str, str]]]] = {
+    # Bias strips are cut to the edges they bind, so edge params reach them too.
     "shirt": {
-        "armhole_curve_depth": SHIRT_SLEEVE,
-        "shoulder_slope": SHIRT_SLEEVE + SHIRT_COLLAR,
-        "neckline_width": SHIRT_SLEEVE + SHIRT_COLLAR,
-        "neckline_depth_front": SHIRT_COLLAR + [("front", "front.ext_top"), ("front", "front.edge")],
-        "neck_drop_back": SHIRT_COLLAR,
+        "armhole_curve_depth": SHIRT_SLEEVE + ARMHOLE_BIAS,
+        "shoulder_slope": SHIRT_SLEEVE + SHIRT_COLLAR + ARMHOLE_BIAS,
+        "neckline_width": SHIRT_SLEEVE + SHIRT_COLLAR + ARMHOLE_BIAS + NECK_BIAS,
+        "neckline_depth_front": SHIRT_COLLAR + [("front", "front.ext_top"), ("front", "front.edge")] + NECK_BIAS,
+        "neck_drop_back": SHIRT_COLLAR + NECK_BIAS,
+        "design_ease": ARMHOLE_BIAS,
+        "shoulder_drop": ARMHOLE_BIAS,
+        "placket_width": NECK_BIAS,
+        "collar_style": NECK_BIAS,
     },
+    # Cuffed sleeves are solved against the armhole, so armhole params reach them.
+    "blouse": DARTED_AFFECTS,
+    "tunic": DARTED_AFFECTS,
     # Dress: skirt params move the renamed skirt halves; the back side truing
     # shifts the back waist dart; a new cap height moves the shortened hem.
     "dress": {
-        "skirt_length": DRESS_SKIRT,
-        "skirt_flare": DRESS_SKIRT,
+        # On a shift dress the skirt runs on in the body panels' lower side seam.
+        "skirt_length": DRESS_SKIRT + _body_edges("side_lower"),
+        "skirt_flare": DRESS_SKIRT + _body_edges("side_lower"),
         "skirt_hip_ease": DRESS_SKIRT,
         "scallop_depth": DRESS_SKIRT,
         "scallop_width": DRESS_SKIRT,
         "back_waist_dart_intake": DRESS_WAIST,
         "sleeve_cap_height": _panel("sleeve", "hem"),
+        "armhole_curve_depth": ARMHOLE_BIAS,
+        "shoulder_slope": ARMHOLE_BIAS,
+        "neckline_width": ARMHOLE_BIAS,
     },
 }
 
@@ -121,22 +151,24 @@ GARMENT_AFFECTS: dict[str, dict[str, list[tuple[str, str]]]] = {
 # Drafts honour only their listed subset; other known params are ignored.
 # Assumption: tunic slits and the back waist dart may add or remove edges,
 # so locality for those params compares edges by id rather than by order.
+DARTED_STYLE = ["blouse_sleeve_length", "shirt_sleeve_length", "cuff_depth", "sleeve_hem_fullness",
+                "sleeve_cap_gather", "cuff_elastic", "sleeveless", "neck_v"]
 GARMENT_PARAMS: dict[str, list[str]] = {
     "tshirt": ["armhole_curve_depth", "sleeve_cap_height", "shoulder_slope", "neck_drop_front",
                "neck_drop_back", "body_length_adjust", "sleeve_width_adjust"],
     "blouse": ["armhole_curve_depth", "sleeve_cap_height", "shoulder_slope", "bust_dart_clearance",
-               "bust_dart_angle", "back_waist_dart_intake", "neckline_depth_front", "neckline_width"],
+               "bust_dart_angle", "back_waist_dart_intake", "neckline_depth_front", "neckline_width"] + DARTED_STYLE,
     "tunic": ["armhole_curve_depth", "sleeve_cap_height", "shoulder_slope", "bust_dart_clearance",
               "bust_dart_angle", "back_waist_dart_intake", "neckline_depth_front", "neckline_width",
-              "tunic_length", "side_flare", "hem_curve", "slit_height"],
+              "tunic_length", "side_flare", "hem_curve", "slit_height"] + DARTED_STYLE,
     "shirt": ["armhole_curve_depth", "shoulder_slope", "neckline_depth_front", "neck_drop_back",
               "neckline_width", "design_ease", "shoulder_drop", "shirt_length", "shirt_sleeve_length",
               "collar_style", "collar_width", "cuff_depth", "pocket_count", "placket_width",
-              "sleeve_hem_fullness", "sleeve_cap_gather", "cuff_elastic"],
+              "sleeve_hem_fullness", "sleeve_cap_gather", "cuff_elastic", "sleeveless", "neck_v", "back_yoke", "back_pleat"],
     "dress": ["armhole_curve_depth", "sleeve_cap_height", "shoulder_slope", "bust_dart_clearance",
               "bust_dart_angle", "back_waist_dart_intake", "neckline_depth_front", "neckline_width",
               "skirt_length", "skirt_flare", "skirt_hip_ease", "scallop_depth", "scallop_width",
-              "dress_waist_seam", "dress_sleeve_length"],
+              "dress_waist_seam", "dress_sleeve_length", "sleeveless", "neck_v"],
     "skirt": ["skirt_length", "skirt_flare", "skirt_hip_ease", "scallop_depth", "scallop_width",
               "waistband_height"],
 }
@@ -163,3 +195,18 @@ def resolve_params(overrides: Mapping[str, float] | None = None) -> dict[str, fl
             raise ValueError(f"{name} must be a whole number")
         result[name] = float(value)
     return result
+
+
+def _yoke_twins(affects: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """On a yoked shirt the back neck, shoulder and top armhole live on the yoke."""
+    twins = {"back.neckline": ["yoke.neckline"], "back.shoulder": ["yoke.shoulder"],
+             "back.armhole": ["yoke.armhole", "yoke.seam", "back.yoke_seam"],
+             "back.fold": ["yoke.fold"]}
+    return [("yoke" if e.startswith("yoke") else "back", e) for _p, edge in affects for e in twins.get(edge, [])]
+
+
+# Every shirt parameter that moves a back edge also moves its yoke twin when the back is yoked.
+for _name in GARMENT_PARAMS["shirt"]:
+    _extra = _yoke_twins(PARAMETERS[_name].affects + GARMENT_AFFECTS["shirt"].get(_name, []))
+    if _extra:
+        GARMENT_AFFECTS["shirt"][_name] = GARMENT_AFFECTS["shirt"].get(_name, []) + _extra

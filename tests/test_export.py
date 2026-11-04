@@ -73,7 +73,7 @@ def test_pdf_structure_has_cover_and_panels(blouse_m: Pattern) -> None:
     assert data.startswith(b"%PDF")
     for panel in blouse_m.panels:
         assert panel.name.encode() in data
-    assert b"100 mm" in data and b"skala 1:1" in data
+    assert b"100 mm" in data and b"scale 1:1" in data
     assert _page_count(data) == len(blouse_m.panels) + 1
 
 
@@ -99,7 +99,7 @@ def test_square_is_283pt() -> None:
     canvas = Canvas(stream, pageCompression=0)
     assert draw_test_square(canvas, 50, 50) == pytest.approx((283.46, 283.46))
     canvas.save()
-    assert "Ukur: harus 10 cm".encode() in stream.getvalue()
+    assert "Measure: must be 10 cm".encode() in stream.getvalue()
 
 
 def test_tiled_pdf_paginates(blouse_m: Pattern) -> None:
@@ -118,7 +118,7 @@ def test_tiled_pdf_paginates(blouse_m: Pattern) -> None:
     expected = 1 + sum(tile_grid(*panel_bounds(panel))[:2][0] * tile_grid(*panel_bounds(panel))[1]
                        for panel in blouse_m.panels)
     assert _page_count(data) == expected
-    assert b"R1C1" in data and "potong".encode() in data
+    assert b"R1C1" in data and "cut".encode() in data
 
 
 def test_tiled_pdf_refuses_failing_pattern(blouse_m: Pattern) -> None:
@@ -134,7 +134,7 @@ def test_tiled_pdf_refuses_failing_pattern(blouse_m: Pattern) -> None:
     broken.params["unlogged_tweak"] = 1.0
     report = verify_pattern(broken)
     assert not report.passed
-    with pytest.raises(ValueError, match="ditolak"):
+    with pytest.raises(ValueError, match="refused"):
         export_pdf_tiled(broken, report, BytesIO())
     stream = BytesIO()
     export_pdf_tiled(broken, report, stream, force=True)
@@ -166,7 +166,7 @@ def test_report_md_lists_every_check(blouse_m: Pattern, tmp_path) -> None:
     target = tmp_path / "report.md"
     export_report_md(report, str(target))
     text = target.read_text(encoding="utf-8")
-    assert "LULUS" in text and blouse_m.metadata["params_hash"] in text
+    assert "PASS" in text and blouse_m.metadata["params_hash"] in text
     for check in report.checks:
         assert f"| {check.id} |" in text
 
@@ -208,7 +208,7 @@ def test_exports_always_carry_seam_allowance() -> None:
     assert svg.getvalue().decode("utf-8").count('class="cut"') == len(pattern.panels)
     pdf = io.BytesIO()
     export_pdf_tiled(pattern, verify(pattern), pdf)
-    assert b"kampuh 10 mm, kelim 25 mm" in pdf.getvalue()
+    assert b"seam allowance 10 mm, hem 25 mm" in pdf.getvalue()
 
 
 def test_dxf_refuses_failing_pattern_and_is_in_mm() -> None:

@@ -24,16 +24,17 @@ from seamproof.verify import Report, verify_pattern
 
 # Deterministic Indonesian keyword mapping for typed notes, in match order.
 NOTES_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("pulling_at_underarm", ("ketiak", "underarm")),
-    ("sleeve_cap_puckering", ("puncak lengan", "cap mengerut", "mengerut")),
+    ("pulling_at_underarm", ("ketiak", "underarm", "armpit")),
+    ("sleeve_cap_puckering", ("puncak lengan", "cap mengerut", "mengerut", "sleeve cap", "pucker")),
     ("shoulder_seam_drops", ("bahu turun", "bahu jatuh", "shoulder")),
-    ("neckline_gapes", ("leher menganga", "leher longgar", "gapes")),
-    ("body_too_tight_chest", ("dada sempit", "dada ketat", "bust sempit", "sempit di dada")),
-    ("drag_lines_toward_bust", ("garis tarik", "drag lines", "tarik ke dada")),
-    ("dart_point_too_pointed", ("kupnat runcing", "ujung kupnat", "pointed")),
-    ("gaping_front_armhole", ("kerung depan longgar", "kerung longgar")),
-    ("hem_swings_forward", ("hem mengayun", "hem ke depan", "swings")),
-    ("tunic_flare_too_wide", ("flare", "terlalu lebar", "kelebaran")),
+    ("neckline_gapes", ("leher menganga", "leher longgar", "gapes", "neckline gap", "neck gap")),
+    ("body_too_tight_chest", ("dada sempit", "dada ketat", "bust sempit", "sempit di dada", "tight at the chest", "tight chest",
+                              "chest tight", "chest too tight", "tight at the bust", "bust tight")),
+    ("drag_lines_toward_bust", ("garis tarik", "drag lines", "drag line", "tarik ke dada")),
+    ("dart_point_too_pointed", ("kupnat runcing", "ujung kupnat", "pointed", "dart tip", "dart point")),
+    ("gaping_front_armhole", ("kerung depan longgar", "kerung longgar", "armhole gap", "gaping armhole", "loose armhole")),
+    ("hem_swings_forward", ("hem mengayun", "hem ke depan", "swings", "hem swing")),
+    ("tunic_flare_too_wide", ("flare", "terlalu lebar", "kelebaran", "too wide")),
 )
 
 WONDER_MODEL = "muse-wonder-1.0"
@@ -68,17 +69,17 @@ class FitProposal:
 
 
 def _severity_of(note: str) -> int:
-    """Read severity from intensifiers; user numbers stay evidence only."""
+    """Read severity from Indonesian or English intensifiers; user numbers stay evidence only."""
     lowered = note.lower()
-    if any(word in lowered for word in ("sangat", "sekali", "banget")):
+    if any(word in lowered for word in ("sangat", "sekali", "banget", "very ", "severe", "extremely", "badly")):
         return 3
-    if any(word in lowered for word in ("sedikit", "agak", "kurang")):
+    if any(word in lowered for word in ("sedikit", "agak", "kurang", "slightly", "a little", "a bit")):
         return 1
     return 2
 
 
 def notes_to_issues(notes: list[str]) -> list[Issue]:
-    """Map typed Indonesian notes to rule issues deterministically."""
+    """Map typed Indonesian or English notes to rule issues deterministically."""
     issues = []
     for note in notes:
         lowered = note.lower()
@@ -108,11 +109,11 @@ def notes_to_issues_muse(notes: list[str],
     from seamproof import llm as llm_module
 
     keys = ", ".join(f"{key} ({rule.description_id})" for key, rule in sorted(RULES.items()))
-    system = ("Kamu membaca catatan toile dari penjahit. Petakan setiap masalah ke SATU kunci dari daftar "
-              f"berikut, atau 'other': {keys}. severity 1 (sedikit), 2 (sedang), 3 (parah) dari kata-katanya. "
-              "Jangan menulis angka koreksi. JSON: "
-              '{"issues": [{"issue": "...", "location": "...", "severity": 2, "evidence": "kutipan catatan"}]}.')
-    user = json.dumps({"catatan": notes}, ensure_ascii=False)
+    system = ("You read toile notes from a tailor (Indonesian or English). Map each problem to ONE key from this list, "
+              f"or 'other': {keys}. severity 1 (slight), 2 (moderate), 3 (severe), judged from the words. "
+              "Do not write correction amounts. Write location in English; evidence quotes the note. JSON: "
+              '{"issues": [{"issue": "...", "location": "...", "severity": 2, "evidence": "quote from the note"}]}.')
+    user = json.dumps({"notes": notes}, ensure_ascii=False)
     try:
         raw = llm_fn(system, user) if llm_fn is not None else llm_module.call_json(system, user, NOTES_SCHEMA,
                                                                                    "toile-notes")
@@ -139,14 +140,14 @@ def _blur_faces(image_bytes: bytes) -> bytes:
 
     data = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     if data is None:
-        raise ValueError("Foto tidak bisa dibaca — periksa berkasnya.")
+        raise ValueError("The photo cannot be read — check the file.")
     cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     for (x, y, w, h) in cascade.detectMultiScale(data, 1.1, 4):
         face = data[y:y + h, x:x + w]
         data[y:y + h, x:x + w] = cv2.GaussianBlur(face, (51, 51), 0)
     ok, encoded = cv2.imencode(".jpg", data)
     if not ok:
-        raise ValueError("Foto gagal diproses.")
+        raise ValueError("The photo could not be processed.")
     return bytes(encoded)
 
 
@@ -160,17 +161,17 @@ def _vision_request(model: str, images_b64: list[str]) -> list[Issue]:
     client = OpenAI(base_url="https://api.meta.ai/v1", api_key=settings.model_api_key)
     content: list[dict[str, Any]] = [
         {"type": "input_text",
-         "text": ("Lihat foto toile (wajah sudah diburamkan). Balas hanya JSON: "
-                  '{"issues": [{"issue": "<salah satu dari: ' + ", ".join(sorted(RULES))
+         "text": ("Look at the toile photos (faces are already blurred). Reply with JSON only: "
+                  '{"issues": [{"issue": "<one of: ' + ", ".join(sorted(RULES))
                   + ', other>", "location": "...", "severity": 1|2|3, "evidence": "..."}]}. '
-                  "Jangan menghitung angka; severity dari keparahan visual.")}]
+                  "Do not compute numbers; severity comes from how severe it looks. Write location and evidence in English.")}]
     content.extend({"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}"}
                    for b64 in images_b64)
     response = client.responses.create(model=model, input=[{"type": "message", "role": "user",
                                                             "content": content}])
     data = json.loads(response.output_text.strip().strip("`"))
     if not isinstance(data, dict) or not isinstance(data.get("issues"), list):
-        raise ValueError("Respons vision bukan JSON issues.")
+        raise ValueError("The vision response is not issues JSON.")
     issues = []
     for item in data["issues"]:
         key = str(item.get("issue", "other"))
@@ -202,7 +203,7 @@ def _apply(issues: list[Issue], base: Mapping[str, float]) -> tuple[dict[str, fl
     for issue in issues:
         rule = RULES.get(issue.key)
         if rule is None:
-            advice.append(f"{issue.location or issue.key}: tidak ada aturan — periksa manual.")
+            advice.append(f"{issue.location or issue.key}: no rule — check by hand.")
             continue
         if rule.advice_id:
             advice.append(f"{rule.description_id}: {rule.advice_id}")
@@ -213,7 +214,7 @@ def _apply(issues: list[Issue], base: Mapping[str, float]) -> tuple[dict[str, fl
         spec = PARAMETERS[param]
         value = float(base.get(param, spec.default)) + step
         if value < spec.min or value > spec.max:
-            clamped.append(f"{param} dijepit ke rentang {spec.min}–{spec.max}")
+            clamped.append(f"{param} clamped to the {spec.min}–{spec.max} range")
             value = min(spec.max, max(spec.min, value))
         changes[param] = value
     return changes, clamped, advice
@@ -236,8 +237,8 @@ def fit_correct(pattern: Pattern, photos: list[str | Path] | None = None,
         try:
             import cv2  # noqa: F401
         except ImportError:
-            raise ValueError("Foto butuh OpenCV untuk buram wajah — belum terpasang. "
-                             "Kirim catatan tertulis saja, tanpa wajah.")
+            raise ValueError("Photos need OpenCV for face blurring — it is not installed. "
+                             "Send written notes only, without faces.")
         blurred = [base64.b64encode(_blur_faces(Path(p).read_bytes())).decode("ascii")
                    for p in photos]
         issues.extend(vision_fn(blurred) if vision_fn is not None else _vision_issues(blurred))
@@ -254,7 +255,7 @@ def fit_correct(pattern: Pattern, photos: list[str | Path] | None = None,
             spec = PARAMETERS[alias]
             changes[alias] = min(spec.max, max(spec.min, float(pattern.params.get(alias, spec.default)) + step))
     for param in sorted(set(changes) - drafted):
-        advice.append(f"{param} tidak dipakai pola {pattern.garment_type} — perbaiki manual di toile.")
+        advice.append(f"{param} is not used by the {pattern.garment_type} pattern — fix it by hand on the toile.")
         del changes[param]
     proposal.changes, proposal.clamped, proposal.advice = changes, clamped, advice
     garment = pattern.garment_type
@@ -264,7 +265,7 @@ def fit_correct(pattern: Pattern, photos: list[str | Path] | None = None,
     merged.update(changes)
 
     def reject(system: str, user: str) -> dict[str, Any]:
-        raise RuntimeError("fitcorrect tanpa LLM: v2 apa adanya")
+        raise RuntimeError("fitcorrect without LLM: v2 as it is")
 
     candidate = REGISTRY[garment](pattern.measurements, pattern.fabric, merged)
     locality = edit_locality(pattern, candidate, changes)
@@ -282,9 +283,9 @@ def fit_correct(pattern: Pattern, photos: list[str | Path] | None = None,
 
 def fit_md(proposal: FitProposal, v1: Pattern, v2_label: str) -> str:
     """Render issues, the param diff and the v2 verdict as Markdown."""
-    lines = [f"# Koreksi Fit — {v1.garment_type} {v1.size_label} → {v2_label}", "",
+    lines = [f"# Fit Correction — {v1.garment_type} {v1.size_label} → {v2_label}", "",
              proposal.label, "",
-             "| Masalah | Lokasi | Bobot | Bukti |",
+             "| Issue | Location | Severity | Evidence |",
              "|---------|--------|-------|-------|"]
     for issue in proposal.issues:
         name = RULES[issue.key].description_id if issue.key in RULES else issue.key
@@ -295,7 +296,7 @@ def fit_md(proposal: FitProposal, v1: Pattern, v2_label: str) -> str:
                      f"{proposal.changes[param]:.1f} |")
     for note in proposal.clamped + proposal.advice:
         lines.append(f"- {note}")
-    lines.append(f"- Lokalitas edit: {'lulus' if proposal.locality_passed else 'GAGAL'}")
+    lines.append(f"- Edit locality: {'passed' if proposal.locality_passed else 'FAILED'}")
     if proposal.v2_report is not None:
         lines.append(f"- v2: {proposal.v2_report.summary_id()}")
     lines += [""]

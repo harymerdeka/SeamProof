@@ -18,19 +18,25 @@ Closure for both is an invisible zip in the left side seam, so front and back
 stay cut on the fold. The sleeve is the blouse sleeve shortened to
 dress_sleeve_length along its underarm lines (never longer than the arm).
 No collar, cuff, pocket or front opening is drafted; seamproof.style reports
-those as notes. No seam allowances are included here.
+those as notes. Sleeveless (sleeveless=1): the bodice is drafted on an armhole
+raised and a shoulder cut in (seamproof.draft.finish), the sleeve is dropped
+and both armholes are bound with bias; the pattern keeps the real body
+measurements. A V neck (neck_v=1) runs straight to centre front; its facing
+follows it. No seam allowances are included here.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Mapping
 
 from seamproof.draft.bodice import BACK_DART_LENGTH, _assemble
+from seamproof.draft.finish import SLEEVELESS_CUT_IN_MM, SLEEVELESS_RAISE_MM, bias_strip
 from seamproof.draft.skirt import WAIST_EASE_MM, _half, _hem_facing
 from seamproof.fabric import FABRIC_EASE
-from seamproof.measurements import WomenMeasurements
+from seamproof.measurements import WOMEN_SIZE_TABLE, WomenMeasurements
 from seamproof.params import resolve_params
-from seamproof.pattern import Curve, Edge, Notch, Panel, Pattern, Point
+from seamproof.pattern import Curve, Edge, Notch, Panel, Pattern, Point, edge_length
 
 FRONT_WAIST_DART_GAP_MM = 25.0  # front waist dart tip below the bust apex
 MIN_SLEEVE_BELOW_CAP_MM = 20.0
@@ -152,6 +158,22 @@ def _rename(panel: Panel, old: str, new: str, partners: Mapping[str, str]) -> Pa
                  panel.cut_count, panel.cut_on_fold)
 
 
+def _arm_finish(panels: list[Panel], sleeve_length: float, sleeveless: bool) -> list[Panel]:
+    """Shorten the sleeve, or drop it and bind both armholes with bias."""
+    if not sleeveless:
+        return [_shorten_sleeve(panel, sleeve_length) if panel.name == "sleeve" else panel for panel in panels]
+    out, armholes = [], 0.0
+    for panel in panels:
+        if panel.name == "sleeve":
+            continue
+        for edge in panel.edges:
+            if edge.id in ("front.armhole", "back.armhole"):
+                edge.seam_partner_id = "armhole_bias.attach"
+                armholes += edge_length(edge)
+        out.append(panel)
+    return out + [bias_strip("armhole_bias", armholes, "body.armholes", 2)]
+
+
 def draft_dress(measurements: WomenMeasurements | Mapping[str, float], fabric: str,
                 params: Mapping[str, float] | None = None) -> Pattern:
     """Draft a waist-seam dress (bodice + skirt) or a one-piece shift dress."""
@@ -161,37 +183,44 @@ def draft_dress(measurements: WomenMeasurements | Mapping[str, float], fabric: s
     p = resolve_params(params)
     ease = FABRIC_EASE[fabric].default_ease_mm
     hip_half = (m.hip + ease) / 4
-    sleeve_length = min(p["dress_sleeve_length"], m.sleeve_length)
+    sleeveless = p["sleeveless"] >= 0.5
+    sleeve_length = 0.0 if sleeveless else min(p["dress_sleeve_length"], m.sleeve_length)
+    # The block is drafted on a higher, narrower armhole; the pattern keeps the real body.
+    block = (replace(m, armhole_depth=m.armhole_depth - SLEEVELESS_RAISE_MM,
+                     shoulder_length=m.shoulder_length - SLEEVELESS_CUT_IN_MM) if sleeveless else m)
+    size = next((name for name, values in WOMEN_SIZE_TABLE.items() if values == m), "custom")
     if p["dress_waist_seam"] < 0.5:
         if p["scallop_depth"] > 0:
             raise ValueError("A scallop hem needs the waist-seam dress")
-        pattern, _ = _assemble("dress", m, fabric, p, m.front_length + p["skirt_length"],
+        pattern, _ = _assemble("dress", block, fabric, p, m.front_length + p["skirt_length"],
                                hip_half + p["skirt_flare"], 0, 0, True, "none")
-        pattern.panels = [_shorten_sleeve(panel, sleeve_length) if panel.name == "sleeve" else panel
-                          for panel in pattern.panels]
+        pattern.panels = _arm_finish(pattern.panels, sleeve_length, sleeveless)
+        pattern.size_label, pattern.measurements = size, m.to_dict()
         pattern.metadata["construction"] = "shift"
         pattern.metadata["sleeve_length_mm"] = sleeve_length
+        pattern.metadata["sleeveless"] = sleeveless
+        if sleeveless:
+            pattern.metadata.pop("sleeve_cap_ease_mm", None)
         pattern.metadata["assumptions"] += (" Shift dress: bodice block lengthened to skirt_length below the "
                                             "front waist; left side invisible zip; no collar or opening.")
         return pattern
 
     hip_y = m.front_length + m.waist_to_hip
-    bodice, parts = _assemble("dress", m, fabric, p, hip_y, hip_half, 0, 0, True, "none")
+    bodice, parts = _assemble("dress", block, fabric, p, hip_y, hip_half, 0, 0, True, "none")
     target = (m.waist + WAIST_EASE_MM) / 4
     front, front_intake = _cut_front(parts["front"], m, target)
     back, back_intake = _cut_back(parts["back"], m, target)
     by_name = {panel.name: panel for panel in bodice.panels}
-    sleeve = _shorten_sleeve(by_name["sleeve"], sleeve_length)
     skirt_front, f_info = _half("front", m, p)
     skirt_back, b_info = _half("back", m, p)
     extra = []
     if p["scallop_depth"] > 0:
         extra.append(_rename(_hem_facing(skirt_front), "hem_facing", "hem_facing",
                              {"front.scallop": "skirt_front.scallop"}))
-    panels = [front, back, sleeve, by_name["facing"],
-              _rename(skirt_front, "front", "skirt_front", {}),
-              _rename(skirt_back, "back", "skirt_back", {})] + extra
-    for panel in panels[4:6]:
+    skirts = [_rename(skirt_front, "front", "skirt_front", {}), _rename(skirt_back, "back", "skirt_back", {})]
+    panels = _arm_finish([front, back, by_name["sleeve"], by_name["facing"]], sleeve_length, sleeveless)
+    panels += skirts + extra
+    for panel in skirts:
         for edge in panel.edges:
             if edge.seam_partner_id == "waist.finish":
                 edge.seam_partner_id = "dress.waist"
@@ -207,7 +236,10 @@ def draft_dress(measurements: WomenMeasurements | Mapping[str, float], fabric: s
         "ease_mm": {"bust": ease, "waist": WAIST_EASE_MM, "hip": p["skirt_hip_ease"]},
         "waist_seam_mm": 4 * target,
         "sleeve_length_mm": sleeve_length,
+        "sleeveless": sleeveless,
         "assumptions": ("Bodice block cut at the waist with front/back waist darts down to the skirt waist "
                         "(10 mm ease); skirt block halves; left side invisible zip; no collar or opening."),
     })
-    return Pattern("dress", bodice.size_label, fabric, m.to_dict(), p, panels, metadata)
+    if sleeveless:
+        metadata.pop("sleeve_cap_ease_mm", None)
+    return Pattern("dress", size, fabric, m.to_dict(), p, panels, metadata)

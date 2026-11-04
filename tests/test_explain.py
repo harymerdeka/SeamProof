@@ -34,8 +34,8 @@ def test_passing_summary_needs_no_llm() -> None:
     report = verify_pattern(pattern)
     assert report.passed
     summary, instructions = explain(report, pattern, llm_fn=fail_if_called)
-    assert summary == (f"Semua {len(report.checks)} pemeriksaan lulus — "
-                       f"pola blouse M siap toile.")
+    assert summary == (f"All {len(report.checks)} checks passed — "
+                       f"blouse M pattern ready for toile.")
     assert instructions == []
 
 
@@ -51,7 +51,7 @@ def test_good_instruction_is_accepted() -> None:
     summary, instructions = explain(report, pattern, llm_fn=llm)
     assert len(instructions) == 1
     assert instructions[0].text == text
-    assert "gagal" in summary
+    assert "failed" in summary
 
 
 def test_injected_failure_numbers_match_verifier() -> None:
@@ -67,7 +67,7 @@ def test_injected_failure_numbers_match_verifier() -> None:
     allowed = _allowed_numbers(report)
     assert instructions
     for item in instructions:
-        assert _numbers_in_mm(item.text), "instruksi harus menyebut angka verifier"
+        assert _numbers_in_mm(item.text), "the instruction must quote a verifier number"
         assert all(n in allowed for n in _numbers_in_mm(item.text))
         assert round(item.amount_mm, 1) in allowed
 
@@ -104,15 +104,15 @@ def test_llm_error_falls_back_to_template() -> None:
     pattern, report = _failing()
     summary, instructions = explain(report, pattern, llm_fn=boom)
     assert len(instructions) == len(report.failures())
-    assert "gagal" in summary
+    assert "failed" in summary
 
 
 def test_other_language_is_rejected() -> None:
-    """Only Indonesian explanations are supported."""
+    """Only English explanations are supported."""
     pattern = REGISTRY["blouse"](M, "woven", {})
     report = verify_pattern(pattern)
     with pytest.raises(ValueError):
-        explain(report, pattern, lang="en")
+        explain(report, pattern, lang="xx")
 
 
 def test_report_md_and_proof_page_carry_explanation() -> None:
@@ -121,15 +121,15 @@ def test_report_md_and_proof_page_carry_explanation() -> None:
 
     pattern = REGISTRY["blouse"](M, "woven", {})
     report = verify_pattern(pattern)
-    explanation = ("Semua pemeriksaan lulus.", [])
+    explanation = ("All checks passed.", [])
     stream = BytesIO()
     export_report_md(report, stream, explanation)
-    assert "Penjelasan penjahit".encode() in stream.getvalue()
+    assert "Tailor explanation".encode() in stream.getvalue()
     pdf = BytesIO()
     canvas = Canvas(pdf, pageCompression=0)
     draw_proof_page(canvas, pattern, report, explanation)
     canvas.save()
-    assert "Penjelasan penjahit".encode() in pdf.getvalue()
+    assert "Tailor explanation".encode() in pdf.getvalue()
 
 
 def test_cli_explain_writes_instructions(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -143,5 +143,11 @@ def test_cli_explain_writes_instructions(monkeypatch: pytest.MonkeyPatch, tmp_pa
                                       "--size", "M", "--fabric", "woven",
                                       "--out", str(out), "--explain", "--force"])
     assert main() == 0
-    assert "Penjelasan penjahit" in (out / "report.md").read_text()
-    assert "Penjelasan penjahit".encode() in (out / "pattern.pdf").read_bytes()
+    assert "Tailor explanation" in (out / "report.md").read_text()
+    assert "Tailor explanation".encode() in (out / "pattern.pdf").read_bytes()
+
+
+def test_numbers_in_mm_read_english_units_and_separators() -> None:
+    """Spelled-out English units convert to mm; a comma before three digits is thousands."""
+    assert _numbers_in_mm("lower it 1.5 centimetres") == [15.0]
+    assert _numbers_in_mm("a 1,500 mm marker") == [1500.0]

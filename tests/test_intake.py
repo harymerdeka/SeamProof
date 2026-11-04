@@ -68,7 +68,7 @@ def test_cross_field_warning_kept() -> None:
     entries[1] = {"field": "waist", "value": 110, "unit": "cm"}
     result = parse_text("x", "tshirt", llm_fn=_mapper(entries))
     assert result["missing"] == []
-    assert any("Pinggang" in w for w in result["warnings"])
+    assert any("Waist" in w for w in result["warnings"])
 
 
 def test_unknown_field_ignored() -> None:
@@ -128,7 +128,7 @@ def test_cli_intake_end_to_end(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     assert main() == 0
     for name in ("pattern.json", "intake.json", "pattern.svg", "pattern.pdf", "report.md", "rounds.md"):
         assert (out / name).is_file()
-    assert "LULUS" in (out / "report.md").read_text()
+    assert "PASS" in (out / "report.md").read_text()
 
 
 def test_cli_intake_stops_on_missing(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys) -> None:
@@ -138,5 +138,5 @@ def test_cli_intake_stops_on_missing(monkeypatch: pytest.MonkeyPatch, tmp_path, 
     monkeypatch.setattr(sys, "argv", ["seamproof", "intake", "--text", "dada 96",
                                       "--garment", "tshirt", "--out", str(out)])
     assert main() == 2
-    assert "kurang" in capsys.readouterr().err
+    assert "Missing" in capsys.readouterr().err
     assert not out.exists()

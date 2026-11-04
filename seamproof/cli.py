@@ -83,7 +83,7 @@ def _repair(args: argparse.Namespace) -> int:
         print(f"Unknown fabric category: {args.fabric}", file=sys.stderr)
         return 2
     if args.inject is not None and args.inject not in INJECTS:
-        print(f"Unknown inject preset: {args.inject} (pilih {', '.join(INJECTS)})", file=sys.stderr)
+        print(f"Unknown inject preset: {args.inject} (choose {', '.join(INJECTS)})", file=sys.stderr)
         return 2
     base = dict(INJECTS[args.inject]) if args.inject else {}
     pattern, report, logs = repair_loop(table[args.size], args.fabric, base,
@@ -96,7 +96,7 @@ def _repair(args: argparse.Namespace) -> int:
     export_svg(pattern, str(out / "pattern.svg"))
     repair_expl = _maybe_explain(args, report, pattern)
     export_report_md(report, str(out / "report.md"), repair_expl)
-    (out / "rounds.md").write_text("# Putaran perbaikan\n\n" + rounds_table_md(logs), encoding="utf-8")
+    (out / "rounds.md").write_text("# Repair rounds\n\n" + rounds_table_md(logs), encoding="utf-8")
     try:
         export_pdf_tiled(pattern, report, str(out / "pattern.pdf"), force=args.force,
                            explanation=repair_expl)
@@ -115,7 +115,7 @@ def _intake(args: argparse.Namespace) -> int:
     from seamproof.repair import repair_loop, rounds_table_md
 
     if bool(args.text) == bool(args.file):
-        print("Berikan tepat satu dari --text atau --file.", file=sys.stderr)
+        print("Give exactly one of --text or --file.", file=sys.stderr)
         return 2
     garment = args.garment
     if garment is None:
@@ -135,16 +135,16 @@ def _intake(args: argparse.Namespace) -> int:
     if args.from_size:
         result = from_size_table(garment, args.from_size, result["measurements"])
     for warning in result["warnings"]:
-        print(f"peringatan: {warning}")
+        print(f"warning: {warning}")
     if result["missing"]:
-        print(f"Pengukuran kurang: {', '.join(result['missing'])} — dilengkapi dulu, tidak dikarang.",
+        print(f"Missing measurements: {', '.join(result['missing'])} — complete them first; nothing is invented.",
               file=sys.stderr)
         return 2
     cls = TShirtMeasurements if garment == "tshirt" else WomenMeasurements
     try:
         measurements = cls(**result["measurements"])
     except (TypeError, ValueError) as exc:
-        print(f"Pengukuran tidak valid: {exc}", file=sys.stderr)
+        print(f"Invalid measurements: {exc}", file=sys.stderr)
         return 2
     pattern, report, logs = repair_loop(measurements, fabric, {}, max_rounds=args.max_rounds,
                                         garment=garment)
@@ -157,7 +157,7 @@ def _intake(args: argparse.Namespace) -> int:
     export_svg(pattern, str(out / "pattern.svg"))
     intake_expl = _maybe_explain(args, report, pattern)
     export_report_md(report, str(out / "report.md"), intake_expl)
-    (out / "rounds.md").write_text("# Putaran perbaikan\n\n" + rounds_table_md(logs), encoding="utf-8")
+    (out / "rounds.md").write_text("# Repair rounds\n\n" + rounds_table_md(logs), encoding="utf-8")
     try:
         export_pdf_tiled(pattern, report, str(out / "pattern.pdf"), force=args.force,
                            explanation=intake_expl)
@@ -247,12 +247,12 @@ def _fitcorrect(args: argparse.Namespace) -> int:
     try:
         v1 = Pattern.from_dict(json.loads(Path(args.pattern).read_text(encoding="utf-8")))
     except (ValueError, KeyError) as exc:
-        print(f"Pola v1 tidak valid: {exc}", file=sys.stderr)
+        print(f"Invalid v1 pattern: {exc}", file=sys.stderr)
         return 2
     notes = [n.strip() for n in (args.notes or "").split(";") if n.strip()]
     photos = [p.strip() for p in (args.photos or "").split(",") if p.strip()]
     if not notes and not photos:
-        print("Berikan --notes dan/atau --photos.", file=sys.stderr)
+        print("Give --notes and/or --photos.", file=sys.stderr)
         return 2
     try:
         proposal, v2 = fit_correct(v1, photos or None, notes or None)
@@ -266,7 +266,7 @@ def _fitcorrect(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "fit.md").write_text(fit_md(proposal, v1, "v2"), encoding="utf-8")
     if v2 is None:
-        print("Lokalitas edit GAGAL — v2 ditolak, tidak diekspor.", file=sys.stderr)
+        print("Edit locality FAILED — v2 refused, not exported.", file=sys.stderr)
         return 1
     v2_report = verify_pattern(v2)
     (out / "v2_pattern.json").write_text(json.dumps(ensure_allowance(v2).to_dict(), indent=2), encoding="utf-8")
@@ -287,7 +287,7 @@ def _mutation_report(_args: argparse.Namespace) -> int:
     """Break pristine drafts once per check and show what the verifier catches."""
     from seamproof.mutations import MUTATIONS, run_mutation_report
 
-    print("| Check | Mutasi | Tertangkap oleh |")
+    print("| Check | Mutation | Caught by |")
     print("|-------|--------|-----------------|")
     caught = 0
     for (check_id, _base, description, _mutate), (_rid, _desc, failed) in zip(MUTATIONS, run_mutation_report()):
@@ -296,7 +296,7 @@ def _mutation_report(_args: argparse.Namespace) -> int:
         if check_id in failed:
             caught += 1
         print(f"| {check_id} | {description} | {hit} |")
-    print(f"Tertangkap: {caught}/{len(MUTATIONS)}.")
+    print(f"Caught: {caught}/{len(MUTATIONS)}.")
     return 0 if caught == len(MUTATIONS) else 1
 
 
@@ -305,9 +305,9 @@ def _server(args: argparse.Namespace) -> int:
     import uvicorn
 
     if args.host not in ("127.0.0.1", "localhost", "::1"):
-        print("Hanya bind loopback yang diizinkan (127.0.0.1).", file=sys.stderr)
+        print("Only a loopback bind is allowed (127.0.0.1).", file=sys.stderr)
         return 2
-    print(f"SeamProof UI di http://127.0.0.1:{args.port} — teruskan port via VS Code, lalu buka di browser.")
+    print(f"SeamProof UI at http://127.0.0.1:{args.port} — forward the port via VS Code, then open it in a browser.")
     uvicorn.run("seamproof.server:app", host=args.host, port=args.port)
     return 0
 

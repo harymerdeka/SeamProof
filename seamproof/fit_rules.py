@@ -37,59 +37,59 @@ class FitRule:
 # no width parameter, so it stays advice-only (add ease / size up at redraft).
 RULES: dict[str, FitRule] = {
     "pulling_at_underarm": FitRule(
-        "pulling_at_underarm", "Ketarik di ketiak",
+        "pulling_at_underarm", "Pulling at the underarm",
         (RuleDelta("armhole_curve_depth", 5.0, 10.0),),
-        "Longgarkan kerung lengan sesuai tabel."),
+        "Loosen the armhole per the table."),
     "sleeve_cap_puckering": FitRule(
-        "sleeve_cap_puckering", "Puncak lengan mengerut",
+        "sleeve_cap_puckering", "Sleeve cap puckering",
         (RuleDelta("sleeve_cap_height", -8.0, -3.0),),
-        "Rendahkan puncak lengan sesuai tabel."),
+        "Lower the sleeve cap per the table."),
     "shoulder_seam_drops": FitRule(
-        "shoulder_seam_drops", "Kampuh bahu turun",
+        "shoulder_seam_drops", "Shoulder seam drops",
         (RuleDelta("shoulder_slope", 3.0, 8.0),),
-        "Sesuaikan kemiringan bahu sesuai tabel.",
-        ("Arah slope mengikuti definisi shoulder_slope (turun dari leher).",)),
+        "Adjust the shoulder slope per the table.",
+        ("Slope direction follows the shoulder_slope definition (drop from the neck).",)),
     "neckline_gapes": FitRule(
-        "neckline_gapes", "Kerung leher menganga",
+        "neckline_gapes", "Neckline gapes",
         (RuleDelta("neck_drop_front", -6.0, -3.0),),
-        "Naikkan kerung leher depan sesuai tabel."),
+        "Raise the front neckline per the table."),
     "body_too_tight_chest": FitRule(
-        "body_too_tight_chest", "Badan sempit di dada",
+        "body_too_tight_chest", "Body too tight at the chest",
         (),
-        "Tambah kelonggaran dalam rentang kain atau naikkan ukuran saat draft ulang.",
-        ("Tidak ada parameter lebar badan; perubahan ease butuh keputusan redraft.",)),
+        "Add ease within the fabric range or size up when redrafting.",
+        ("There is no body width parameter; an ease change needs a redraft decision.",)),
     "drag_lines_toward_bust": FitRule(
-        "drag_lines_toward_bust", "Garis tarik ke arah dada",
+        "drag_lines_toward_bust", "Drag lines toward the bust",
         (RuleDelta("bust_dart_angle", 1.0, 3.0),),
-        "Putar kupnat mengikuti tabel.",
-        ("Sketsa meminta mm untuk intake; intake turunan (bust-high_bust), "
-         "maka dipakai rotasi kupnat dalam derajat.",)),
+        "Rotate the dart per the table.",
+        ("The sketch asks for mm of intake; intake is derived (bust-high_bust), "
+         "so dart rotation in degrees is used.",)),
     "dart_point_too_pointed": FitRule(
-        "dart_point_too_pointed", "Ujung kupnat terlalu runcing",
+        "dart_point_too_pointed", "Dart point too pointed",
         (RuleDelta("bust_dart_clearance", 5.0, 10.0),),
-        "Jauhkan ujung kupnat dari puncak sesuai tabel."),
+        "Move the dart tip away from the apex per the table."),
     "gaping_front_armhole": FitRule(
-        "gaping_front_armhole", "Kerung depan longgar",
+        "gaping_front_armhole", "Front armhole gapes",
         (RuleDelta("armhole_curve_depth", -6.0, -3.0),),
-        "Kecilkan kerung depan sesuai tabel.",
-        ("Alternatif memindah ke kupnat tidak otomatis; butuh pola baru.",)),
+        "Tighten the front armhole per the table.",
+        ("Moving it into a dart is not automatic; that needs a new pattern.",)),
     "hem_swings_forward": FitRule(
-        "hem_swings_forward", "Hem mengayun ke depan",
+        "hem_swings_forward", "Hem swings forward",
         (RuleDelta("hem_curve", 2.0, 5.0),),
-        "Sesuaikan lengkung hem sesuai tabel."),
+        "Adjust the hem curve per the table."),
     "tunic_flare_too_wide": FitRule(
-        "tunic_flare_too_wide", "Flare tunik terlalu lebar",
+        "tunic_flare_too_wide", "Tunic flare too wide",
         (RuleDelta("side_flare", -30.0, -10.0),),
-        "Kurangi flare sisi sesuai tabel."),
+        "Reduce the side flare per the table."),
 }
 
-LABEL_ID = "Saran koreksi — konfirmasi sebelum memotong"
+LABEL_ID = "Suggested correction — confirm before cutting"
 
 
 def delta_for(rule: FitRule, severity: int) -> dict[str, float]:
     """Interpolate each bounded delta by severity 1..3."""
     if severity not in (1, 2, 3):
-        raise ValueError("Severity harus 1, 2 atau 3.")
+        raise ValueError("Severity must be 1, 2 or 3.")
     out = {}
     for item in rule.deltas:
         out[item.param] = item.lo_mm + (item.hi_mm - item.lo_mm) * (severity - 1) / 2

@@ -50,11 +50,11 @@ def test_pack_size_mode_returns_verified_downloads() -> None:
                                           "mode": "size", "size": "M"}).json()
     assert pack["passed"] and pack["job"]
     assert any(c["id"] == "S3" and c["passed"] for c in pack["checks"])
-    assert pack["explanation"]["summary"].startswith("Semua")
+    assert pack["explanation"]["summary"].startswith("All")
     pdf = client.get(pack["files"]["pdf"])
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
     md = client.get(pack["files"]["md"])
-    assert "Penjelasan penjahit" in md.text
+    assert "Tailor explanation" in md.text
 
 
 def test_pack_failing_pattern_has_no_pdf() -> None:

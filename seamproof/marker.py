@@ -118,7 +118,7 @@ def _shape(panel: Panel) -> _Shape:
         # Both halves share the fold line; a tiny close merges the seam exactly.
         cut = unary_union([cut, mirror]).buffer(0.01, join_style="mitre").buffer(-0.01, join_style="mitre")
         if cut.geom_type != "Polygon":
-            raise ValueError(f"Panel {panel.name}: lipatan tidak bisa dibuka menjadi satu potongan.")
+            raise ValueError(f"Panel {panel.name}: the fold cannot be opened into one piece.")
         stitch += [_reflect(line, a, b) for line in stitch]
         notches += [_reflect(line, a, b) for line in notches]
         fold = LineString([a, b])
@@ -206,7 +206,7 @@ def _fft_size(n: int) -> int:
 def pack(pattern: Pattern, fabric_width_mm: float) -> Marker:
     """Nest every cut piece on the fabric; return placements and usage."""
     if not fabric_width_mm > 0:
-        raise ValueError("Lebar kain harus positif.")
+        raise ValueError("Fabric width must be positive.")
     pattern = ensure_allowance(pattern)
     pad = math.ceil((SPACING_MM / 2 + GRID_MM) / GRID_MM)
     margin_cells = math.ceil(SPACING_MM / GRID_MM)
@@ -225,7 +225,7 @@ def pack(pattern: Pattern, fabric_width_mm: float) -> Marker:
         width = options[0][2][0][0].cut.bounds[2]
         if width + 2 * SPACING_MM > fabric_width_mm:
             raise ValueError(
-                f"Panel {panel.name} ({width:.0f} mm) tidak muat di lebar {fabric_width_mm:.0f} mm.")
+                f"Panel {panel.name} ({width:.0f} mm) does not fit the {fabric_width_mm:.0f} mm width.")
         for copy_no, mirrored, variants in options:
             jobs.append((panel, copy_no, mirrored, variants, variants[0][0].cut.bounds[3]))
     # Longest along the fabric first: it packed shorter markers than area-first
@@ -257,7 +257,7 @@ def pack(pattern: Pattern, fabric_width_mm: float) -> Marker:
             if best is None or key < best[0]:
                 best = (key, local, rotation, mask, row, col)
         if best is None:  # Cannot happen after the width check, except by bug.
-            raise ValueError(f"Panel {panel.name} gagal diletakkan — periksa lebar kain.")
+            raise ValueError(f"Panel {panel.name} could not be placed — check the fabric width.")
         _key, local, rotation, mask, row, col = best
         h, w = mask.shape
         grid[row:row + h, col:col + w] |= mask

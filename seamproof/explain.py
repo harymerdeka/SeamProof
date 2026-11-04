@@ -1,4 +1,4 @@
-"""Tailor-language explanations for verifier reports, in Indonesian.
+"""Tailor-language explanations for verifier reports, in English.
 
 The LLM only turns verifier numbers into short practical instructions; it
 never computes. Every number in the model text is extracted by regex and must
@@ -42,19 +42,20 @@ EXPLAIN_SCHEMA: dict[str, Any] = {
 }
 
 SYSTEM_PROMPT = (
-    "Kamu menulis instruksi perbaikan pola untuk penjahit konveksi. "
-    "Setiap instruksi: panel mana, tepi (edge) mana, titik/acuan mana, arah mana, berapa mm. "
-    "Gunakan HANYA angka-angka yang diberikan (satuan mm, boleh ditulis dalam cm). "
-    "Jangan menulis angka lain apa pun: tulis hitungan dengan kata (satu, dua). "
-    "Jangan menghitung ulang atau mengubah angka. "
-    "Pakai id panel dan id tepi persis seperti daftar yang diberikan. "
-    "Balas hanya satu objek JSON mentah: "
+    "You write pattern repair instructions for a tailor in a garment workshop, in plain English. "
+    "Each instruction states which panel, which edge, which point or reference, which direction and how many mm. "
+    "Use ONLY the numbers given (in mm; they may be written in cm). "
+    "Do not write any other number: spell counts as words (one, two). "
+    "Do not recompute or change numbers. "
+    "Use panel ids and edge ids exactly as listed. "
+    "Reply with a single raw JSON object only: "
     '{"instructions": [{"panel": "...", "edge": "...", "action": "...", "amount_mm": 0, "text": "..."}]}.'
 )
 
-# Assumption: Indonesian decimals use a comma ("9,5"); dots inside digit runs
-# are thousand separators ("1.000" = 1000). Bare numbers mean mm.
-_NUMBER_RE = re.compile(r"(\d[\d.]*(?:,\d+)?)\s*(cm|mm|sentimeter|milimeter|m\b)?",
+# Assumption: a dot or comma before exactly three digits is a thousands separator
+# ("1.000" and "1,000" = 1000); otherwise either one is the decimal mark ("9.5",
+# "9,5"), so Indonesian and English text both read. Bare numbers mean mm.
+_NUMBER_RE = re.compile(r"(\d[\d.]*(?:,\d+)?)\s*(cm|mm|sentimeter|milimeter|centimet|millimet|m\b)?",
                         re.IGNORECASE)
 
 
@@ -78,12 +79,12 @@ def _numbers_in_mm(text: str) -> list[float]:
     """Extract every number from prose, converted to mm (cm x10)."""
     found = []
     for raw, unit in _NUMBER_RE.findall(text):
-        cleaned = re.sub(r"(\d)\.(\d{3}\b)", r"\1\2", raw).replace(",", ".")
+        cleaned = re.sub(r"(\d)[.,](\d{3}\b)", r"\1\2", raw).replace(",", ".")
         try:
             value = float(cleaned)
         except ValueError:
             continue
-        if (unit or "").lower().startswith(("cm", "sentimeter")):
+        if (unit or "").lower().startswith(("cm", "sentimeter", "centimet")):
             value *= 10.0
         found.append(round(value, 1))
     return found
@@ -102,7 +103,7 @@ def _allowed_numbers(report: Report) -> set[float]:
 
 
 def _template_instructions(report: Report) -> list[Instruction]:
-    """Deterministic Indonesian fallback quoting only verifier numbers."""
+    """Deterministic fallback quoting only verifier numbers."""
     out = []
     for check in report.failures():
         if check.actual is not None and check.expected is not None:
@@ -110,10 +111,10 @@ def _template_instructions(report: Report) -> list[Instruction]:
         else:
             amount = check.actual if check.actual is not None else check.expected
         out.append(Instruction(
-            panel="—", edge="—", action="perbaiki", amount_mm=amount,
+            panel="—", edge="—", action="fix", amount_mm=amount,
             text=(f"{check.id} {check.name_id}: {check.message_id} "
-                  f"(nilai {_fmt(check.actual)} mm, harapan {_fmt(check.expected)} mm, "
-                  f"batas {_fmt(check.tolerance)} mm).")))
+                  f"(value {_fmt(check.actual)} mm, expected {_fmt(check.expected)} mm, "
+                  f"limit {_fmt(check.tolerance)} mm).")))
     return out
 
 
@@ -127,34 +128,34 @@ def _known_ids(pattern: Pattern) -> tuple[set[str], set[str]]:
 def _payload(report: Report, pattern: Pattern) -> str:
     """Serialize failed checks with numbers plus valid panel/edge ids."""
     failed = [
-        {"id": c.id, "name": c.name_id, "pesan": c.message_id,
-         "nilai_mm": c.actual, "harapan_mm": c.expected, "batas_mm": c.tolerance}
+        {"id": c.id, "name": c.name_id, "message": c.message_id,
+         "actual_mm": c.actual, "expected_mm": c.expected, "tolerance_mm": c.tolerance}
         for c in report.failures()
     ]
-    panels = [{"panel": panel.name, "tepi": [edge.id for edge in panel.edges]}
+    panels = [{"panel": panel.name, "edges": [edge.id for edge in panel.edges]}
               for panel in pattern.panels]
-    return json.dumps({"pakaian": report.garment, "ukuran": report.size,
-                       "gagal": failed, "panel": panels})
+    return json.dumps({"garment": report.garment, "size": report.size,
+                       "failed": failed, "panels": panels})
 
 
-def explain(report: Report, pattern: Pattern, lang: str = "id",
+def explain(report: Report, pattern: Pattern, lang: str = "en",
             llm_fn: Callable[[str, str], dict[str, Any]] | None = None
             ) -> tuple[str, list[Instruction]]:
-    """Explain a report in tailor Indonesian; return (summary, instructions).
+    """Explain a report in tailor English; return (summary, instructions).
 
     Passing reports use a template with no LLM call. For failures the LLM
     drafts instructions, but every number in its text (and amount_mm, panel
     and edge ids) is verified; anything unverifiable falls back to templates.
     """
-    if lang != "id":
-        raise ValueError("Penjelasan hanya tersedia dalam bahasa Indonesia (id).")
+    if lang != "en":
+        raise ValueError("Explanations are only available in English (en).")
     total = len(report.checks)
     failed = report.failures()
     if not failed:
-        return (f"Semua {total} pemeriksaan lulus — pola {report.garment} "
-                f"{report.size} siap toile.", [])
-    summary = (f"Ada {len(failed)} dari {total} pemeriksaan yang gagal "
-               f"pada pola {report.garment} {report.size}: "
+        return (f"All {total} checks passed — {report.garment} "
+                f"{report.size} pattern ready for toile.", [])
+    summary = (f"{len(failed)} of {total} checks failed "
+               f"on the {report.garment} {report.size} pattern: "
                + ", ".join(c.id for c in failed) + ".")
     try:
         if llm_fn is not None:

@@ -35,7 +35,7 @@ def test_draft_writes_production_pack(monkeypatch: pytest.MonkeyPatch, tmp_path)
         assert (out / name).is_file()
     assert json.loads((out / "pattern.json").read_text())["garment_type"] == "blouse"
     assert (out / "pattern.pdf").read_bytes().startswith(b"%PDF")
-    assert "LULUS" in (out / "report.md").read_text()
+    assert "PASS" in (out / "report.md").read_text()
 
 
 def test_draft_refuses_failing_pattern(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -67,7 +67,7 @@ def test_verify_command(monkeypatch: pytest.MonkeyPatch, tmp_path, capsys: pytes
     capsys.readouterr()
     monkeypatch.setattr(sys, "argv", ["seamproof", "verify", str(out / "pattern.json")])
     assert main() == 0
-    assert "LULUS" in capsys.readouterr().out
+    assert "PASS" in capsys.readouterr().out
 
 
 def test_mutation_report_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -75,5 +75,5 @@ def test_mutation_report_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest
     monkeypatch.setattr(sys, "argv", ["seamproof", "mutation-report"])
     assert main() == 0
     out = capsys.readouterr().out
-    assert "Tertangkap: 40/40" in out
+    assert "Caught: 45/45" in out
     assert "| G1 |" in out and "| R1 |" in out

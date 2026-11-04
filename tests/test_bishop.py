@@ -37,7 +37,7 @@ def test_puff_plan_gathers_hem_and_cap() -> None:
     assert plan.params["cuff_elastic"] == 1.0 and plan.params["cuff_depth"] > 0
     bishop = plan_piece("top", "shirt", dict(BRIEF_FEATURES, sleeve_style="bishop", cuff=False, elastic_cuff=False))
     assert bishop.params["cuff_elastic"] == 1.0 and bishop.params["sleeve_cap_gather"] == 0
-    assert any("karet" in n for n in bishop.notes)
+    assert any("elastic" in n for n in bishop.notes)
 
 
 @pytest.mark.parametrize("size", ["S", "M", "L", "XL"])
@@ -112,6 +112,6 @@ def test_report_md_lists_gathers_for_the_tailor() -> None:
     out = io.BytesIO()
     export_report_md(report, out)
     text = out.getvalue().decode()
-    assert "## Kerutan" in text and "Karet manset" in text and "Puncak lengan" in text
+    assert "## Gathers" in text and "Cuff elastic" in text and "Sleeve cap" in text
     plain = verify_pattern(REGISTRY["shirt"](WOMEN_SIZE_TABLE["M"], "woven", {}))
     assert "gathers_mm" not in plain.meta

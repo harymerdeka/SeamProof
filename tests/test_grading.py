@@ -109,7 +109,7 @@ def test_graded_pdf_nests_all_sizes() -> None:
     assert _page_count(data) == 1 + len(report.patterns["S"].panels)
     for size in SIZES:
         assert size.encode() in data
-    assert "Ukur: harus 10 cm".encode() in data
+    assert "Measure: must be 10 cm".encode() in data
     scratch = BytesIO()
     canvas = Canvas(scratch, pageCompression=0)
     assert draw_test_square(canvas, 50, 50) == pytest.approx((283.46, 283.46))
@@ -143,7 +143,7 @@ def test_cli_grade_writes_pack(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     for size in SIZES:
         assert (out / f"pattern_{size}.json").is_file()
     assert (out / "graded.pdf").read_bytes().startswith(b"%PDF")
-    assert "LULUS" in (out / "grade_report.md").read_text()
+    assert "PASS" in (out / "grade_report.md").read_text()
 
 
 def test_cli_grade_rejects_missing_extreme(monkeypatch: pytest.MonkeyPatch, tmp_path,
@@ -154,4 +154,4 @@ def test_cli_grade_rejects_missing_extreme(monkeypatch: pytest.MonkeyPatch, tmp_
                                       "--sizes", "M,L,XL", "--fabric", "woven",
                                       "--out", str(out)])
     assert main() == 2
-    assert "terkecil" in capsys.readouterr().err
+    assert "smallest" in capsys.readouterr().err

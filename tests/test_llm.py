@@ -69,12 +69,12 @@ class FakeClient:
             self.chat = SimpleNamespace(completions=FakeCompletions(texts))
 
 
-def _settings(backend="meta"):
+def _settings(backend="meta", baseten_tasks=()):
     """Fake settings with a decoy secret that must never appear in logs."""
     return SimpleNamespace(llm_backend=backend, model_api_key="fake-secret-123",
                            muse_model="test-muse", baseten_api_key="fake-secret-123",
                            baseten_base_url="https://example.invalid/v1",
-                           baseten_model="test-baseten")
+                           baseten_model="test-baseten", baseten_tasks=baseten_tasks)
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, texts, backend="meta"):
@@ -167,3 +167,20 @@ def test_api_error_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(llm_module, "OpenAI", lambda **kwargs: SimpleNamespace(responses=Broken()))
     with pytest.raises(LLMError, match="call failed"):
         call_json("sys", "user", SCHEMA, "broken")
+
+
+def test_baseten_tasks_route_one_purpose(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With LLM_BACKEND=meta, a BASETEN_TASKS purpose still goes to Baseten."""
+    endpoint = _install(monkeypatch, [GOOD], backend="baseten")
+    monkeypatch.setattr(llm_module, "load_settings", lambda: _settings("meta", ("explain",)))
+    call_json("sys", "user", SCHEMA, "explain-blouse")
+    assert endpoint.calls[0]["model"] == "test-baseten"
+
+
+def test_backend_for_prefix_match() -> None:
+    """Only the exact task or "<task>-..." purposes are rerouted."""
+    settings = _settings("meta", ("explain",))
+    assert llm_module.backend_for(settings, "explain") == "baseten"
+    assert llm_module.backend_for(settings, "explain-tshirt") == "baseten"
+    assert llm_module.backend_for(settings, "explainer") == "meta"
+    assert llm_module.backend_for(settings, "repair-tshirt-round1") == "meta"

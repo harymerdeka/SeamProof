@@ -57,7 +57,7 @@ def test_dress_plan_reports_what_it_cannot_draft() -> None:
     plan = plan_piece("dress", "dress", validate_reading({"pieces": [{"part": "dress", "kind": "dress",
                                                                      "features": features}]}).pieces[0].features)
     text = " ".join(plan.notes)
-    assert "Kerah" in text and "Kancing" in text and "Saku" in text and "scallop" in text
+    assert "collar" in text and "button" in text and "Pockets" in text and "scallop" in text
     assert plan.params["scallop_depth"] == 0.0 and plan.params["dress_waist_seam"] == 0.0
     resolve_params(plan.params)
 

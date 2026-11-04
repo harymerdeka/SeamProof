@@ -84,10 +84,10 @@ def test_refine_warns_on_no_change_and_on_many_changes() -> None:
     """Zero or more than two changes are flagged for the user."""
     current = {"part": "top", "kind": "shirt", "features": SHIRT, "color": "sage"}
     same = refine_design(current, "ubah jadi kain sutra", _fake({"kind": "shirt", "features": {}}))
-    assert not same.changes and any("Tidak ada" in w for w in same.warnings)
+    assert not same.changes and any("No category" in w for w in same.warnings)
     many = refine_design(current, "ganti semuanya", _fake({"kind": "shirt", "color": "navy", "features": {
         "fit": "boxy", "length": "thigh", "pockets": 2}}))
-    assert len(many.changes) == 4 and any("4 hal" in w for w in many.warnings)
+    assert len(many.changes) == 4 and any("4 things" in w for w in many.warnings)
 
 
 def test_diff_design_orders_kind_features_colour() -> None:
@@ -115,10 +115,14 @@ def test_flat_shows_what_is_drafted_not_what_was_asked() -> None:
     """Unsupported choices are drawn as the pattern will be cut."""
     asked = dict(SHIRT, collar="band", sleeve_length="sleeveless", opening="none")
     drawn = drafted_features(plan_piece("top", "shirt", asked))
-    assert drawn["collar"] == "shirt_collar" and drawn["sleeve_length"] == "short"
+    assert drawn["collar"] == "band" and drawn["sleeve_length"] == "sleeveless"
     assert drawn["opening"] == "button_front"
+    # A V neck is drawn only when the pattern drafts it: never with a collar.
+    assert drafted_features(plan_piece("top", "shirt", dict(asked, neckline="v")))["neckline"] == "round"
+    vest = plan_piece("top", "shirt", dict(SHIRT, collar="none", neckline="v", sleeve_length="sleeveless"))
+    assert drafted_features(vest)["neckline"] == "v" and vest.params["neck_v"] == 1.0
     blouse = drafted_features(plan_piece("top", "blouse", dict(SHIRT, collar="none", opening="none", pockets=2)))
-    assert blouse["pockets"] == 0 and blouse["sleeve_length"] == "long"
+    assert blouse["pockets"] == 0 and blouse["collar"] == "none"
     ET.fromstring(plan_flat(plan_piece("top", "other", SHIRT)))  # undraftable still sketches
 
 
@@ -169,7 +173,7 @@ def test_dress_flat_draws_what_the_dress_draft_makes() -> None:
     """Dress details the draft lacks are not sketched; scallop needs a waist seam."""
     shift = drafted_features(plan_piece("dress", "dress", DRESS))
     assert shift["collar"] == "none" and shift["opening"] == "none" and shift["pockets"] == 0
-    assert shift["sleeve_length"] == "short" and shift["hem"] == "straight"
+    assert shift["sleeve_length"] == DRESS["sleeve_length"] and shift["hem"] == "straight"
     seamed = drafted_features(plan_piece("dress", "dress", dict(DRESS, waist_seam=True)))
     assert seamed["hem"] == "scalloped"
     shift_svg = plan_flat(plan_piece("dress", "dress", DRESS))
@@ -210,7 +214,7 @@ def test_merge_takes_each_part_from_its_photo() -> None:
     f = merged.piece.features
     assert merged.piece.kind == "shirt" and f["fit"] == "boxy" and f["pockets"] == 2
     assert f["sleeve_length"] == "long" and f["cuff"] is True and f["collar"] == "peter_pan"
-    assert merged.provenance == {"siluet": 1, "badan": 1, "lengan": 2, "kerah": 2}
+    assert merged.provenance == {"siluet": 1, "badan": 1, "lengan": 2, "kerah": 2, "kuk": 1, "lipit": 1}
     assert merged.plan.garment == "shirt" and merged.plan.params["collar_style"] == 2
 
 
@@ -291,3 +295,13 @@ def test_refine_without_change_says_what_is_missing() -> None:
                                                                  "unsupported": ["lengan balon"]}))
     assert not result.changes and result.unsupported == ["lengan balon"]
     assert any("lengan balon" in w for w in result.warnings)
+
+
+def test_flat_draws_contrast_trim_and_visible_lines_on_dark_fabric() -> None:
+    """Contrast collar/cuffs get the contrast fill; detail lines turn light on black fabric."""
+    shirt = plan_piece("top", "shirt", dict(SHIRT, cuff=True, contrast_collar=True, contrast_cuff=True))
+    dark, light = plan_flat(shirt, "hitam"), plan_flat(shirt, "putih")
+    assert 'trim contrast' in dark and ".trim.contrast{fill:#F6F5F0" in dark
+    assert ".trim.contrast{fill:#2A2A2A" in light
+    assert "stroke:#d9dedb" in dark and "stroke:#d9dedb" not in light
+    assert "trim contrast" not in plan_flat(plan_piece("top", "shirt", SHIRT), "hitam")

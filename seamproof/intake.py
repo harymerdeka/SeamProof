@@ -79,23 +79,23 @@ def _build_result(items: list[tuple[str, float, str]], garment: str) -> dict[str
     warnings: list[str] = []
     for field, value, unit in items:
         if field not in fields:
-            warnings.append(f"Kolom '{field}' tidak dikenal untuk {garment} — diabaikan.")
+            warnings.append(f"Field '{field}' is unknown for {garment} — ignored.")
             continue
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
             missing.append(field)
-            warnings.append(f"Nilai {field} bukan angka — ditandai hilang.")
+            warnings.append(f"The {field} value is not a number — marked missing.")
             continue
         if unit not in ("cm", "mm"):
             if field not in missing:
                 missing.append(field)
-            warnings.append(f"Satuan {field} harus cm atau mm — ditandai hilang.")
+            warnings.append(f"The {field} unit must be cm or mm — marked missing.")
             continue
         mm = float(value) * 10 if unit == "cm" else float(value)
         low, high = RANGES[field]
         if mm <= 0 or not low <= mm <= high:
             if field not in missing:
                 missing.append(field)
-            warnings.append(f"{field} {mm:.0f} mm di luar {low:.0f}–{high:.0f} — ditandai hilang.")
+            warnings.append(f"{field} {mm:.0f} mm is outside {low:.0f}–{high:.0f} — marked missing.")
             continue
         seen[field] = mm
     for field in fields:
@@ -110,17 +110,17 @@ def _cross_checks(seen: dict[str, float], garment: str) -> list[str]:
     warnings = []
     chest = seen.get("bust", seen.get("chest", 0))
     if "waist" in seen and chest and seen["waist"] > chest + 150:
-        warnings.append("Pinggang jauh lebih besar dari dada/bust — periksa angkanya.")
+        warnings.append("Waist is much larger than chest/bust — check the numbers.")
     if "neck_width" in seen and "shoulder_width" in seen and seen["neck_width"] >= seen["shoulder_width"]:
-        warnings.append("Leher lebih lebar dari bahu — periksa angkanya.")
+        warnings.append("Neck is wider than the shoulders — check the numbers.")
     if "armhole_depth" in seen and "back_length" in seen and seen["armhole_depth"] >= seen["back_length"]:
-        warnings.append("Kerung lengan lebih dalam dari panjang punggung — periksa angkanya.")
+        warnings.append("Armhole is deeper than the back length — check the numbers.")
     if "bust" in seen and "high_bust" in seen and seen["bust"] <= seen["high_bust"]:
-        warnings.append("Bust harus lebih besar dari dada atas — periksa angkanya.")
+        warnings.append("Bust must be larger than high bust — check the numbers.")
     if "front_length" in seen and "apex_height" in seen and seen["front_length"] <= seen["apex_height"]:
-        warnings.append("Panjang depan harus melewati puncak dada — periksa angkanya.")
+        warnings.append("Front length must pass the bust apex — check the numbers.")
     if "apex_distance" in seen and "shoulder_width" in seen and seen["apex_distance"] >= seen["shoulder_width"]:
-        warnings.append("Jarak puncak dada melebihi lebar bahu — periksa angkanya.")
+        warnings.append("Apex distance exceeds the shoulder width — check the numbers.")
     return warnings
 
 
@@ -135,13 +135,13 @@ def parse_file(path: str | Path) -> dict[str, Any]:
     raw = Path(path).read_text(encoding="utf-8")
     data = json.loads(raw) if str(path).endswith(".json") else yaml.safe_load(raw)
     if not isinstance(data, dict) or not isinstance(data.get("measurements"), dict):
-        raise ValueError("Berkas harus berisi unit dan measurements.")
+        raise ValueError("The file must contain unit and measurements.")
     unit = data.get("unit")
     if unit not in ("cm", "mm"):
-        raise ValueError("Berkas harus mencantumkan unit: cm atau mm.")
+        raise ValueError("The file must state a unit: cm or mm.")
     garment = data.get("garment") or _guess_garment(set(data["measurements"]))
     if garment not in GARMENT_FIELDS:
-        raise ValueError(f"Garmen tak dikenal: {garment}.")
+        raise ValueError(f"Unknown garment: {garment}.")
     items = [(str(field), value, unit) for field, value in data["measurements"].items()]
     return _build_result(items, garment)
 
@@ -157,13 +157,13 @@ def parse_text(text: str, garment: str = "tshirt",
                llm_fn: Callable[[str, str], dict[str, Any]] | None = None) -> dict[str, Any]:
     """Map free Indonesian/English text to millimetre measurements via the LLM."""
     if garment not in GARMENT_FIELDS:
-        raise ValueError(f"Garmen tak dikenal: {garment}.")
+        raise ValueError(f"Unknown garment: {garment}.")
     if llm_fn is not None:
         raw = llm_fn(SYSTEM_PROMPT, text)
     else:
         raw = llm_module.call_json(SYSTEM_PROMPT, text, INTAKE_SCHEMA, f"intake-{garment}")
     if not isinstance(raw, dict) or not isinstance(raw.get("measurements"), list):
-        raise ValueError("LLM tidak mengembalikan daftar pengukuran.")
+        raise ValueError("The LLM did not return a measurement list.")
     items = []
     for entry in raw["measurements"]:
         if isinstance(entry, dict):
@@ -175,12 +175,12 @@ def from_size_table(garment: str, size: str, overrides_mm: Mapping[str, float]) 
     """Start from a size-table entry in mm and override the given fields."""
     table = SIZE_TABLE if garment == "tshirt" else WOMEN_SIZE_TABLE
     if garment not in GARMENT_FIELDS or size not in table:
-        raise ValueError(f"Ukuran tak dikenal: {garment} {size}.")
+        raise ValueError(f"Unknown size: {garment} {size}.")
     base = table[size].to_dict()
     extra = [name for name in overrides_mm if name not in base]
     merged = dict(base)
     merged.update({name: float(value) for name, value in overrides_mm.items() if name in base})
     result = _build_result([(name, value, "mm") for name, value in merged.items()], garment)
     for name in extra:
-        result["warnings"].append(f"Kolom '{name}' tidak dikenal untuk {garment} — diabaikan.")
+        result["warnings"].append(f"Field '{name}' is unknown for {garment} — ignored.")
     return result
